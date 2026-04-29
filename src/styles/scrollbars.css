@@ -1,0 +1,38 @@
+/* Global themed scrollbars.
+ * Uses CSS vars set dynamically by ThemeContext:
+ *   --theme-accent, --theme-accent-hover, --theme-border,
+ *   --theme-bg-secondary (fallbacks provided).
+ */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-accent, #666) transparent;
+}
+
+/* WebKit / Chromium / Edge */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--theme-bg-secondary, transparent);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--theme-accent, #666);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--theme-accent-hover, var(--theme-accent, #888));
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

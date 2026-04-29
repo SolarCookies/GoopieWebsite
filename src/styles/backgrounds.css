@@ -1,0 +1,195 @@
+/* ── Shooting Stars (Steam theme) ── */
+.bg-shooting-stars {
+  position: relative;
+  overflow: hidden;
+}
+
+.bg-shooting-stars::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 50% 10%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 70% 40%, rgba(255,255,255,0.35), transparent),
+    radial-gradient(1px 1px at 90% 75%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 15% 85%, rgba(255,255,255,0.25), transparent),
+    radial-gradient(1px 1px at 45% 55%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 80% 15%, rgba(255,255,255,0.4), transparent);
+  animation: starsTwinkle 6s ease-in-out infinite alternate;
+}
+
+@keyframes starsTwinkle {
+  0% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+/* Individual shooting star streaks */
+.shooting-star {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(65,124,255,0.8), rgba(65,124,255,0.3), transparent);
+  border-radius: 999px;
+  opacity: 0;
+  transform: rotate(-35deg);
+}
+
+.shooting-star::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 4px;
+  height: 3px;
+  background: rgba(180, 210, 255, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 6px 2px rgba(65,124,255,0.5);
+}
+
+.shooting-star:nth-child(1) {
+  top: 12%; left: 15%;
+  width: 100px;
+  animation: shootingStar 4s ease-in 0s infinite;
+}
+.shooting-star:nth-child(2) {
+  top: 35%; left: 55%;
+  width: 70px;
+  animation: shootingStar 5s ease-in 1.5s infinite;
+}
+.shooting-star:nth-child(3) {
+  top: 55%; left: 30%;
+  width: 90px;
+  animation: shootingStar 4.5s ease-in 3s infinite;
+}
+.shooting-star:nth-child(4) {
+  top: 20%; left: 75%;
+  width: 60px;
+  animation: shootingStar 6s ease-in 2s infinite;
+}
+.shooting-star:nth-child(5) {
+  top: 70%; left: 10%;
+  width: 85px;
+  animation: shootingStar 5.5s ease-in 4s infinite;
+}
+.shooting-star:nth-child(6) {
+  top: 45%; left: 80%;
+  width: 75px;
+  animation: shootingStar 4.8s ease-in 0.8s infinite;
+}
+
+@keyframes shootingStar {
+  0% {
+    opacity: 0;
+    transform: rotate(-35deg) translateX(0);
+  }
+  5% {
+    opacity: 1;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  30% {
+    opacity: 0;
+    transform: rotate(-35deg) translateX(300px);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+
+/* ── Green Swirls (Blades theme) ── */
+.bg-green-swirl {
+  position: relative;
+  overflow: hidden;
+}
+
+.bg-green-swirl::before,
+.bg-green-swirl::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+}
+
+.bg-green-swirl::before {
+  width: 600px;
+  height: 600px;
+  top: -150px;
+  right: -100px;
+  background: radial-gradient(circle, #4ca64c 0%, #2a7a2a 40%, transparent 70%);
+  animation: swirlFloat1 12s ease-in-out infinite alternate;
+}
+
+.bg-green-swirl::after {
+  width: 500px;
+  height: 500px;
+  bottom: -100px;
+  left: -80px;
+  background: radial-gradient(circle, #3d8b3d 0%, #1e5a1e 40%, transparent 70%);
+  animation: swirlFloat2 10s ease-in-out infinite alternate;
+}
+
+.swirl-orb {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.1;
+}
+
+.swirl-orb:nth-child(1) {
+  width: 400px;
+  height: 400px;
+  top: 30%;
+  left: 40%;
+  background: radial-gradient(circle, #5cbf5c 0%, transparent 70%);
+  animation: swirlFloat3 14s ease-in-out infinite alternate;
+}
+
+.swirl-orb:nth-child(2) {
+  width: 350px;
+  height: 350px;
+  top: 60%;
+  right: 20%;
+  background: radial-gradient(circle, #3a9a3a 0%, transparent 70%);
+  animation: swirlFloat1 16s ease-in-out 2s infinite alternate;
+}
+
+.swirl-orb:nth-child(3) {
+  width: 300px;
+  height: 300px;
+  top: 10%;
+  left: 20%;
+  background: radial-gradient(circle, #4ca64c 0%, transparent 70%);
+  animation: swirlFloat2 11s ease-in-out 1s infinite alternate;
+}
+
+@keyframes swirlFloat1 {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(60px, -40px) scale(1.1); }
+  66% { transform: translate(-30px, 50px) scale(0.95); }
+  100% { transform: translate(40px, 20px) scale(1.05); }
+}
+
+@keyframes swirlFloat2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-50px, -30px) scale(1.1); }
+  100% { transform: translate(30px, 40px) scale(0.9); }
+}
+
+@keyframes swirlFloat3 {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate(70px, -60px) rotate(180deg) scale(1.15); }
+  100% { transform: translate(-40px, 30px) rotate(360deg) scale(0.95); }
+}

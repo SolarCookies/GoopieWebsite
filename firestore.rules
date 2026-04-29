@@ -1,0 +1,135 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if the requesting user is an admin
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: check if the user is a developer assigned to a specific game
+    function isDeveloperFor(gameId) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'developer'
+        && gameId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedGames;
+    }
+
+    // Users collection — each doc ID is the Firebase Auth UID
+    match /users/{userId} {
+      // Anyone authenticated can read their own profile
+      allow get: if request.auth != null && request.auth.uid == userId;
+
+      // Admins can read and list all user profiles
+      allow get, list: if isAdmin();
+
+      // Users can create their own doc on first sign-in
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Users can update their own doc as long as they don't change role or assignedGames
+      // Developers can also update their own assignedGames (for self-assign on game creation)
+      // Admins can update any user doc (role changes, game assignments)
+      allow update: if isAdmin()
+        || (request.auth != null && request.auth.uid == userId
+            && request.resource.data.role == resource.data.role
+            && (
+              request.resource.data.assignedGames == resource.data.assignedGames
+              || resource.data.role == 'developer'
+            ));
+
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    // Games collection
+    match /games/{gameId} {
+      // Anyone can read public games; authenticated users can read all
+      allow read: if true;
+
+      // Admins can create/update/delete any game
+      allow create, update, delete: if isAdmin();
+
+      // Developers can create games (must be non-public)
+      allow create: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'developer'
+        && request.resource.data.isPublic == false;
+
+      // Developers assigned to this game can update it (but cannot set isPublic to true)
+      allow update: if isDeveloperFor(gameId)
+        && request.resource.data.isPublic != true;
+
+      // Developers assigned to this game can delete it
+      allow delete: if isDeveloperFor(gameId);
+
+    }
+
+    // Ratings collection — doc ID is {gameId}_{userId}
+    match /ratings/{ratingId} {
+      allow read: if true;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == request.resource.data.userId
+        && request.resource.data.stars is int
+        && request.resource.data.stars >= 1
+        && request.resource.data.stars <= 5
+        && request.resource.data.gameId is string;
+
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+    }
+
+    // Developer access requests — doc ID is the requesting user's UID
+    match /developerRequests/{uid} {
+      // Users can read/create their own request
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid;
+
+      // Admins can read all requests and delete them (approve/deny)
+      allow read, delete: if isAdmin();
+    }
+
+    // Helper: check if the requesting user is an admin or any developer
+    function isDeveloperOrAdmin() {
+      return request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'developer'
+        );
+    }
+
+    // News posts — anyone can read; developers and admins can post.
+    // Posts must be authored by the signed-in user. Original author or any
+    // admin may edit/delete.
+    match /news/{postId} {
+      allow read: if true;
+
+      allow create: if isDeveloperOrAdmin()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.body is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.body.size() > 0;
+
+      allow update: if isAdmin()
+        || (isDeveloperOrAdmin()
+            && resource.data.authorUid == request.auth.uid
+            && request.resource.data.authorUid == resource.data.authorUid);
+
+      allow delete: if isAdmin()
+        || (isDeveloperOrAdmin() && resource.data.authorUid == request.auth.uid);
+    }
+
+    // Editable site content blocks (homeTagline, footerCopyright, eula,
+    // privacy). Public read so unauthenticated visitors see them; admin-only
+    // writes via the in-browser ContentEditor.
+    match /siteContent/{key} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Per-user favorites — doc ID is the owner's UID.
+    match /userFavorites/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
