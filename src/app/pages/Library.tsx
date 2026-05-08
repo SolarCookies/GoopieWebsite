@@ -28,6 +28,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 import { BackgroundAudioPlayer } from '../components/BackgroundAudioPlayer';
 import { Markdown } from '../components/Markdown';
 import { useNews } from '../data/useNews';
+import { buildReleaseDownloadPrefix, readInstalledInfo, useGameReleases, type InstalledInfo } from '../data/useGameReleases';
+import { GameVersionPicker } from '../components/GameVersionPicker';
 
 const statusColors: Record<Game['status'], string> = {
   Ingame: 'bg-red-500 text-white',
@@ -43,7 +45,7 @@ const statusDescriptions: Record<Game['status'], string> = {
   Ingame: 'Very little crashes but has graphics issues',
 };
 
-const EXPECTED_LAUNCHER_VERSION = 8;
+const EXPECTED_LAUNCHER_VERSION = 9;
 
 export function Library() {
   const { recompName: urlRecompName } = useParams<{ recompName: string }>();
@@ -187,6 +189,59 @@ export function Library() {
   const { getValue: getCvarValue, setValue: setCvarValue, reset: resetCvar, buildArgs: buildCvarArgs } =
     useCvarSettings(selectedGame?.id, selectedGame?.cvars);
 
+  // Per-game release/version selection (GitHub releases enumeration).
+  const releasesState = useGameReleases(selectedGame);
+  const {
+    repo: githubRepo,
+    visibleReleases,
+    showNightlies,
+    setShowNightlies,
+    selectedTag,
+    selectedAsset,
+    setSelectedTag,
+    setSelectedAsset,
+    loading: releasesLoading,
+    error: releasesError,
+  } = releasesState;
+  const [installedInfo, setInstalledInfo] = useState<InstalledInfo | null>(null);
+
+  // Compute the download URL prefix passed to the launcher's Update().
+  const releaseDownloadPrefix = useMemo(() => {
+    if (!githubRepo || !selectedTag) return selectedGame?.githubReleaseUrl ?? '';
+    return buildReleaseDownloadPrefix(githubRepo, selectedTag);
+  }, [githubRepo, selectedTag, selectedGame?.githubReleaseUrl]);
+
+  // Build the per-release API URL used by the launcher's NeedsUpdate().
+  const releaseApiUrl = useMemo(() => {
+    if (githubRepo && selectedTag) {
+      return `https://api.github.com/repos/${githubRepo}/releases/tags/${encodeURIComponent(selectedTag)}`;
+    }
+    return selectedGame?.githubApiUrl ?? '';
+  }, [githubRepo, selectedTag, selectedGame?.githubApiUrl]);
+
+  // Treat a build/version mismatch with what's installed as needing an update.
+  const selectionMismatch = useMemo(() => {
+    if (!installedInfo) return false;
+    if (selectedTag && installedInfo.version && installedInfo.version !== selectedTag) return true;
+    if (selectedAsset && installedInfo.asset && installedInfo.asset !== selectedAsset) return true;
+    return false;
+  }, [installedInfo, selectedTag, selectedAsset]);
+
+  const triggerUpdate = useCallback(() => {
+    if (!selectedGame) return;
+    const w = window as any;
+    if (typeof w.Update !== 'function') return;
+    w.Update(
+      selectedGame.recompName,
+      releaseDownloadPrefix,
+      selectedAsset ?? '',
+      selectedTag ?? '',
+    );
+    setUpdating(true);
+    setDownloadProgress(0);
+    setDownloadString('');
+  }, [selectedGame, releaseDownloadPrefix, selectedAsset, selectedTag]);
+
   // Normalize headerImage to an array
   const headerImages = useMemo(() => {
     if (!selectedGame) return [];
@@ -222,7 +277,8 @@ export function Library() {
     if (selectedGame) {
       setIsoInstalled(w.isIsoInstalled ? w.isIsoInstalled(selectedGame.recompName) : false);
       setExeUpdated(w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName) : false);
-      setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, selectedGame.githubApiUrl ?? '') : false);
+      setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, releaseApiUrl, selectedAsset ?? '') : false);
+      setInstalledInfo(readInstalledInfo(selectedGame.recompName));
       const isUp = w.isUpdating ? w.isUpdating(selectedGame.id) : false;
       setUpdating(isUp);
       if (isUp) {
@@ -236,7 +292,7 @@ export function Library() {
         setExtractString(w.getExtractString ? w.getExtractString(selectedGame.id) : 'Extracting...');
       }
     }
-  }, [selectedGame]);
+  }, [selectedGame, releaseApiUrl, selectedAsset]);
 
   useEffect(() => {
     checkState();
@@ -278,7 +334,8 @@ export function Library() {
             setDownloadString(w.getDownloadString ? w.getDownloadString(selectedGame.id) : '');
           } else {
             setExeUpdated(w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName) : false);
-            setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, selectedGame.githubApiUrl ?? '') : false);
+            setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, releaseApiUrl, selectedAsset ?? '') : false);
+            setInstalledInfo(readInstalledInfo(selectedGame.recompName));
           }
           // Extract check
           const isExt = w.isExtracting ? w.isExtracting(selectedGame.id) : false;
@@ -595,15 +652,10 @@ export function Library() {
                               <Play className="w-5 h-5 mr-2" />
                               Play
                             </Button>
-                            {needsUpdate && (
+                            {(needsUpdate || selectionMismatch) && (
                               <Button
                                 className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
-                                onClick={() => {
-                                  (window as any).Update(selectedGame.recompName, selectedGame.githubReleaseUrl ?? '');
-                                  setUpdating(true);
-                                  setDownloadProgress(0);
-                                  setDownloadString('');
-                                }}
+                                onClick={triggerUpdate}
                               >
                                 <Download className="w-5 h-5 mr-2" />
                                 Update
@@ -645,12 +697,7 @@ export function Library() {
                           <div className="flex flex-wrap gap-3">
                             <Button
                               className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
-                              onClick={() => {
-                                (window as any).Update(selectedGame.recompName, selectedGame.githubReleaseUrl ?? '');
-                                setUpdating(true);
-                                setDownloadProgress(0);
-                                setDownloadString('');
-                              }}
+                              onClick={triggerUpdate}
                             >
                               <Download className="w-5 h-5 mr-2" />
                               Update
@@ -680,6 +727,23 @@ export function Library() {
                           <FolderOpen className="w-5 h-5 mr-2" />
                           Select Game Iso
                         </Button>
+                      )}
+                      {isoInstalled && !extracting && !updating && (
+                        <div className="mt-3">
+                          <GameVersionPicker
+                            game={selectedGame}
+                            visibleReleases={visibleReleases}
+                            selectedTag={selectedTag}
+                            selectedAsset={selectedAsset}
+                            setSelectedTag={setSelectedTag}
+                            setSelectedAsset={setSelectedAsset}
+                            showNightlies={showNightlies}
+                            setShowNightlies={setShowNightlies}
+                            installed={installedInfo}
+                            loading={releasesLoading}
+                            error={releasesError}
+                          />
+                        </div>
                       )}
                     </div>
                   ) : null}
@@ -863,8 +927,8 @@ export function Library() {
                           <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => { setAudioMuted(true); (window as any).Play(selectedGame.recompName, buildCvarArgs()); }}>
                             <Play className="w-4 h-4 mr-1" /> Play
                           </Button>
-                          {needsUpdate && (
-                            <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Update(selectedGame.recompName, selectedGame.githubReleaseUrl ?? ''); setUpdating(true); setDownloadProgress(0); setDownloadString(''); }}>
+                          {(needsUpdate || selectionMismatch) && (
+                            <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
                               <Download className="w-4 h-4 mr-1" /> Update
                             </Button>
                           )}
@@ -884,7 +948,7 @@ export function Library() {
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
-                          <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Update(selectedGame.recompName, selectedGame.githubReleaseUrl ?? ''); setUpdating(true); setDownloadProgress(0); setDownloadString(''); }}>
+                          <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
                             <Download className="w-4 h-4 mr-1" /> Update
                           </Button>
                           <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Uninstall(selectedGame.recompName); checkState(); }}>
@@ -896,6 +960,24 @@ export function Library() {
                       <Button className="bg-[#da5d09] hover:bg-[#f18339] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Install(selectedGame.recompName); setExtracting(true); setExtractProgress(0); setExtractString(''); }}>
                         <FolderOpen className="w-4 h-4 mr-1" /> Select Game Iso
                       </Button>
+                    )}
+                    {isoInstalled && !extracting && !updating && (
+                      <div className="mt-3">
+                        <GameVersionPicker
+                          compact
+                          game={selectedGame}
+                          visibleReleases={visibleReleases}
+                          selectedTag={selectedTag}
+                          selectedAsset={selectedAsset}
+                          setSelectedTag={setSelectedTag}
+                          setSelectedAsset={setSelectedAsset}
+                          showNightlies={showNightlies}
+                          setShowNightlies={setShowNightlies}
+                          installed={installedInfo}
+                          loading={releasesLoading}
+                          error={releasesError}
+                        />
+                      </div>
                     )}
                   </div>
                 ) : null}

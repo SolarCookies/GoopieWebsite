@@ -18,6 +18,7 @@ const Externals = lazy(() => import('./pages/Externals').then(m => ({ default: m
 const Favorites = lazy(() => import('./pages/Favorites').then(m => ({ default: m.Favorites })));
 const Downloads = lazy(() => import('./pages/Downloads').then(m => ({ default: m.Downloads })));
 const VehicleBrowser = lazy(() => import('./pages/VehicleBrowser').then(m => ({ default: m.VehicleBrowser })));
+const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
 function isInCEF(): boolean {
   return typeof (window as any)?.GetPlatform === 'function';
@@ -110,5 +111,9 @@ export const router = createBrowserRouter([
   {
     path: '/:recompName/vehicles',
     Component: withSuspense(VehicleBrowser),
+  },
+  {
+    path: '*',
+    Component: withSuspense(NotFound),
   },
 ]);

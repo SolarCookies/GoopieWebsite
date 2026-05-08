@@ -58,6 +58,22 @@ export interface Game {
   githubApiUrl?: string;
 
   /**
+   * GitHub repository in `owner/repo` form. When provided, it is used to
+   * enumerate all releases (stable + nightly) and the per-release asset list,
+   * so users can pick a specific version + build.
+   *
+   * If omitted, the repo is inferred from `githubReleaseUrl` / `githubApiUrl`.
+   */
+  githubRepo?: string;
+
+  /**
+   * Preferred default asset filename suffix for this game's GitHub releases,
+   * relative to the recompName. Defaults to `"-windows-x64-release.exe"` then
+   * `"-windows-x64.exe"` when not set.
+   */
+  preferredAssetSuffix?: string;
+
+  /**
    * Optional external launcher URL for games that use their own proprietary launcher.
    * When set, a link button is shown on the game page so users can get the game externally.
    */
