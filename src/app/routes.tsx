@@ -27,7 +27,7 @@ function isInCEF(): boolean {
 
 // Track whether we've already performed the initial CEF redirect. We only want
 // to bounce `/` → `/library` on the very first load inside the launcher; after
-// that, the user is free to visit Home explicitly via the sidebar.
+// that, the user is free to visit Home explicitly via the sidebar. 
 let initialCEFRedirectDone = false;
 
 function RootRoute() {
