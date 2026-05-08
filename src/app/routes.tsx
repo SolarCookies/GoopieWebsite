@@ -19,6 +19,7 @@ const Favorites = lazy(() => import('./pages/Favorites').then(m => ({ default: m
 const Downloads = lazy(() => import('./pages/Downloads').then(m => ({ default: m.Downloads })));
 const VehicleBrowser = lazy(() => import('./pages/VehicleBrowser').then(m => ({ default: m.VehicleBrowser })));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+const MarkdownReference = lazy(() => import('./pages/MarkdownReference').then(m => ({ default: m.MarkdownReference })));
 
 function isInCEF(): boolean {
   return typeof (window as any)?.GetPlatform === 'function';
@@ -111,6 +112,10 @@ export const router = createBrowserRouter([
   {
     path: '/:recompName/vehicles',
     Component: withSuspense(VehicleBrowser),
+  },
+  {
+    path: '/markdown-reference',
+    Component: withSuspense(MarkdownReference),
   },
   {
     path: '*',

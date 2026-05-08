@@ -288,7 +288,18 @@ export function GameEditor({ game, onSave, onDelete, onClose, isNew, readOnly }:
 
           {/* Description */}
           <div>
-            <label className={labelClass} style={labelStyle}>Description *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelClass} style={labelStyle}>Description *</label>
+              <a
+                href="/markdown-reference"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs hover:underline"
+                style={{ color: 'var(--theme-accent)' }}
+              >
+                Markdown reference ↗
+              </a>
+            </div>
             <textarea
               value={form.description}
               onChange={e => update('description', e.target.value)}

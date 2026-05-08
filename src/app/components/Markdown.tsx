@@ -15,6 +15,14 @@
  *
  * Inline: **bold**, *italic*, `code`, [text](url), ![alt](url).
  *
+ * Inline: **bold**, *italic*, ~~strikethrough~~, `code`, [text](url), ![alt](url).
+ *
+ * Additional block types:
+ *   1. ordered list item
+ *   > blockquote
+ *   ---                              → horizontal rule
+ *   ```lang / ```                    → fenced code block
+ *
  * Only https URLs are accepted for media to avoid mixed-content and
  * unsafe schemes. Output never injects raw HTML, so user-authored
  * content is safe to render.
@@ -67,6 +75,10 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     {
       regex: /\*([^*]+)\*/,
       render: (m, k) => <em key={k}>{m[1]}</em>,
+    },
+    {
+      regex: /~~([^~]+)~~/,
+      render: (m, k) => <s key={k}>{m[1]}</s>,
     },
     {
       regex: /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/,
@@ -130,6 +142,38 @@ export function Markdown({ source, className }: { source: string; className?: st
     if (!line.trim()) {
       i++;
       continue;
+    }
+
+    // HTML <img> tag (GitHub README style): <img src="https://..." alt="..." width="..." height="..." />
+    const htmlImg = /^<img\b([^>]*)\/?>\s*$/i.exec(line);
+    if (htmlImg) {
+      const attrs = htmlImg[1];
+      const src = /\bsrc="([^"]+)"/.exec(attrs)?.[1] ?? /\bsrc='([^']+)'/.exec(attrs)?.[1];
+      const alt = /\balt="([^"]*)"/.exec(attrs)?.[1] ?? /\balt='([^']*)'/.exec(attrs)?.[1] ?? '';
+      const width = /\bwidth="(\d+)"/.exec(attrs)?.[1] ?? /\bwidth='(\d+)'/.exec(attrs)?.[1];
+      const height = /\bheight="(\d+)"/.exec(attrs)?.[1] ?? /\bheight='(\d+)'/.exec(attrs)?.[1];
+      if (src && isSafeUrl(src)) {
+        blocks.push(
+          <figure key={key++} className="my-4">
+            <img
+              src={src}
+              alt={alt}
+              loading="lazy"
+              width={width ? Number(width) : undefined}
+              height={height ? Number(height) : undefined}
+              className="max-w-full h-auto rounded-lg mx-auto"
+              style={{ border: '1px solid var(--theme-border)' }}
+            />
+            {alt && (
+              <figcaption className="text-xs text-center mt-2" style={{ color: 'var(--theme-text-muted)' }}>
+                {alt}
+              </figcaption>
+            )}
+          </figure>,
+        );
+        i++;
+        continue;
+      }
     }
 
     // Block image: ![alt](url) on its own line
@@ -257,6 +301,90 @@ export function Markdown({ source, className }: { source: string; className?: st
       continue;
     }
 
+    // Horizontal rule
+    if (/^(?:---+|\*\*\*+|___+)\s*$/.test(line)) {
+      blocks.push(
+        <hr key={key++} className="my-4 border-t" style={{ borderColor: 'var(--theme-border)' }} />,
+      );
+      i++;
+      continue;
+    }
+
+    // Fenced code block
+    if (/^```/.test(line)) {
+      i++;
+      const codeLines: string[] = [];
+      while (i < lines.length && !/^```/.test(lines[i])) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++; // skip closing ```
+      blocks.push(
+        <pre
+          key={key++}
+          className="p-3 rounded-lg overflow-x-auto my-3 text-sm font-mono"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--theme-card-bg) 80%, transparent)', border: '1px solid var(--theme-border)' }}
+        >
+          <code>{codeLines.join('\n')}</code>
+        </pre>,
+      );
+      continue;
+    }
+
+    // Blockquote (incl. GitHub alert syntax: > [!NOTE] / [!TIP] / [!WARNING] / [!IMPORTANT] / [!CAUTION])
+    if (/^>\s*/.test(line)) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && /^>\s*/.test(lines[i])) {
+        quoteLines.push(lines[i].replace(/^>\s*/, ''));
+        i++;
+      }
+      const alertMatch = /^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]$/i.exec(quoteLines[0]?.trim() ?? '');
+      if (alertMatch) {
+        const kind = alertMatch[1].toUpperCase() as 'NOTE' | 'TIP' | 'WARNING' | 'IMPORTANT' | 'CAUTION';
+        const alertStyles: Record<string, { border: string; title: string; icon: string }> = {
+          NOTE:      { border: '#3b82f6', title: '#60a5fa', icon: 'ℹ' },
+          TIP:       { border: '#22c55e', title: '#4ade80', icon: '✦' },
+          WARNING:   { border: '#f97316', title: '#fb923c', icon: '⚠' },
+          IMPORTANT: { border: '#a855f7', title: '#c084fc', icon: '✶' },
+          CAUTION:   { border: '#ef4444', title: '#f87171', icon: '✖\uFE0E' },
+        };
+        const { border, title, icon } = alertStyles[kind];
+        const bodyLines = quoteLines.slice(1);
+        blocks.push(
+          <blockquote
+            key={key++}
+            className="border-l-4 pl-4 my-3 py-1"
+            style={{ borderColor: border }}
+          >
+            <p className="font-semibold mb-1 text-sm flex items-center gap-1.5" style={{ color: title }}>
+              <span aria-hidden="true">{icon}</span>
+              {kind.charAt(0) + kind.slice(1).toLowerCase()}
+            </p>
+            {bodyLines.filter(l => l.trim()).map((ql, qi) => (
+              <p key={qi} className="mb-1 leading-relaxed" style={{ color: 'var(--theme-text-secondary)' }}>
+                {renderInline(ql, `bq-${key}-${qi}`)}
+              </p>
+            ))}
+          </blockquote>,
+        );
+        continue;
+      }
+      blocks.push(
+        <blockquote
+          key={key++}
+          className="border-l-4 pl-4 my-3"
+          style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-muted)' }}
+        >
+          {quoteLines.map((ql, qi) => (
+            <p key={qi} className="mb-1 leading-relaxed italic">
+              {renderInline(ql, `bq-${key}-${qi}`)}
+            </p>
+          ))}
+        </blockquote>,
+      );
+      continue;
+    }
+
     // Bullet list
     if (/^\s*[-*]\s+/.test(line)) {
       const items: string[] = [];
@@ -274,6 +402,23 @@ export function Markdown({ source, className }: { source: string; className?: st
       continue;
     }
 
+    // Ordered list
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+\.\s+/, ''));
+        i++;
+      }
+      blocks.push(
+        <ol key={key++} className="list-decimal list-inside space-y-1 mb-3">
+          {items.map((it, idx) => (
+            <li key={idx}>{renderInline(it, `ol-${key}-${idx}`)}</li>
+          ))}
+        </ol>,
+      );
+      continue;
+    }
+
     // Paragraph (consume contiguous non-blank, non-special lines)
     const para: string[] = [line];
     i++;
@@ -282,6 +427,10 @@ export function Markdown({ source, className }: { source: string; className?: st
       lines[i].trim() &&
       !/^(#{1,3})\s+/.test(lines[i]) &&
       !/^\s*[-*]\s+/.test(lines[i]) &&
+      !/^\s*\d+\.\s+/.test(lines[i]) &&
+      !/^>/.test(lines[i]) &&
+      !/^```/.test(lines[i]) &&
+      !/^(?:---+|\*\*\*+|___+)\s*$/.test(lines[i]) &&
       !/^!\[[^\]]*\]\(https:\/\/[^\s)]+\)\s*$/.test(lines[i]) &&
       !/^!(?:video|audio)\[[^\]]*\]\(https:\/\/[^\s)]+\)\s*$/.test(lines[i])
     ) {
