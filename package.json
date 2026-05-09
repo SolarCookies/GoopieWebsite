@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build && node scripts/prepare-functions.mjs",
+    "build": "vite build && node scripts/generate-og-pages.mjs",
     "dev": "vite",
     "server": "node server/upload-server.mjs"
   },
