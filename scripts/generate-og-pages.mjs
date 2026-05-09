@@ -22,10 +22,10 @@ const API_KEY    = process.env.VITE_FIREBASE_API_KEY;
 const PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID;
 
 if (!API_KEY || !PROJECT_ID) {
-  console.warn(
-    '⚠  VITE_FIREBASE_API_KEY or VITE_FIREBASE_PROJECT_ID not set – skipping OG page generation.',
+  console.error(
+    'ERROR: VITE_FIREBASE_API_KEY or VITE_FIREBASE_PROJECT_ID not set – cannot generate OG pages.',
   );
-  process.exit(0);
+  process.exit(1);
 }
 
 const distIndex = resolve(root, 'dist', 'index.html');
@@ -149,7 +149,13 @@ function buildGameHtml(game) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-const games = await fetchAllGames();
+let games;
+try {
+  games = await fetchAllGames();
+} catch (err) {
+  console.error('ERROR: Failed to fetch games from Firestore:', err);
+  process.exit(1);
+}
 console.log(`Fetched ${games.length} games from Firestore.`);
 
 let count = 0;
