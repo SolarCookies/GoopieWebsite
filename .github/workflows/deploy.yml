@@ -33,8 +33,9 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       - name: Copy installer into dist
-        run: cp GoopieLauncher.msi dist/GoopieLauncher.msi
-        run: cp default.xex dist/default.xex
+        run: |
+          cp GoopieLauncher.msi dist/GoopieLauncher.msi
+          cp default.xex dist/default.xex
 
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1
