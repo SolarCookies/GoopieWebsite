@@ -38,6 +38,7 @@ export function GameEditor({ game, onSave, onDelete, onClose, isNew, readOnly }:
     accentColor: '#000000',
     mediaLinks: [],
     platforms: ['Windows'],
+    setGameDataRootToAssets: true,
   });
 
   const [devInput, setDevInput] = useState('');
@@ -394,6 +395,23 @@ export function GameEditor({ game, onSave, onDelete, onClose, isNew, readOnly }:
             <span className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>Disable Save Manager</span>
             <span className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>
               {form.disableSaveManager ? '— Save manager is hidden for this game' : '— Save manager is available'}
+            </span>
+          </div>
+
+          {/* Launcher game_data_root behavior */}
+          <div className="flex items-center gap-3">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.setGameDataRootToAssets === true}
+                onChange={e => update('setGameDataRootToAssets', e.target.checked || undefined)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 peer-checked:bg-[#5c7e10] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all" style={{ backgroundColor: form.setGameDataRootToAssets ? undefined : 'var(--theme-item-selected)' }}></div>
+            </label>
+            <span className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>Set game_data_root to assets folder</span>
+            <span className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+              {form.setGameDataRootToAssets ? '— Adds --game_data_root=".../assets" when launching' : '— Do not pass --game_data_root'}
             </span>
           </div>
 

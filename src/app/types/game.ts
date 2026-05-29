@@ -80,6 +80,12 @@ export interface Game {
   externalLauncherUrl?: string;
 
   /**
+   * When true, launcher will append `--game_data_root="<game>/assets"` on launch.
+   * Existing games should default to false unless explicitly enabled.
+   */
+  setGameDataRootToAssets?: boolean;
+
+  /**
    * When true, the save manager is disabled for this game.
    */
   disableSaveManager?: boolean;

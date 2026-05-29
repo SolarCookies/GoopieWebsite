@@ -18,6 +18,7 @@ export interface GameRelease {
 export interface InstalledInfo {
   version?: string;
   asset?: string;
+  exePath?: string;
 }
 
 const NIGHTLY_KEY = 'goopie:showNightlies';
@@ -53,8 +54,9 @@ export function getGitHubRepo(game: Pick<Game, 'githubRepo' | 'githubReleaseUrl'
  */
 export function pickDefaultAsset(game: Pick<Game, 'recompName' | 'preferredAssetSuffix'>, assets: ReleaseAsset[]): string | undefined {
   if (assets.length === 0) return undefined;
+
+  // Named exe candidates (old format, backward-compat).
   const exes = assets.filter(a => a.name.toLowerCase().endsWith('.exe'));
-  if (exes.length === 0) return assets[0].name;
   const candidates = [
     game.preferredAssetSuffix && `${game.recompName}${game.preferredAssetSuffix}`,
     `${game.recompName}-windows-x64-release.exe`,
@@ -64,7 +66,58 @@ export function pickDefaultAsset(game: Pick<Game, 'recompName' | 'preferredAsset
     const hit = exes.find(a => a.name.toLowerCase() === c.toLowerCase());
     if (hit) return hit.name;
   }
-  return exes[0].name;
+
+  // Any exe (old format fallback).
+  if (exes.length > 0) return exes[0].name;
+
+  const zip = assets.find(a => a.name.toLowerCase().endsWith('.zip'));
+  if (zip) return zip.name;
+  const tgz = assets.find(a => a.name.toLowerCase().endsWith('.tar.gz'));
+  if (tgz) return tgz.name;
+
+  return assets[0].name;
+}
+
+/**
+ * Returns a stable-sorted copy of `assets` with platform-appropriate artifacts
+ * first. All assets are preserved — nothing is filtered out.
+ */
+export function sortAssetsByRelevance(assets: ReleaseAsset[], platform?: string, arch?: string): ReleaseAsset[] {
+  const isWindows = !platform || platform === 'Windows';
+  const isLinux = platform === 'Linux';
+  const isMac = platform === 'macOS';
+  const isArm = arch === 'arm64' || arch === 'aarch64';
+  const isX64 = arch === 'x86_64' || arch === 'amd64' || arch === 'x64';
+
+  const rank = (a: ReleaseAsset): number => {
+    const name = a.name.toLowerCase();
+    let score = 0;
+
+    if (isWindows) {
+      if (name.includes('windows') || name.includes('win32') || name.includes('win64')) score -= 10;
+      if (name.endsWith('.exe')) score -= 5;
+      if (name.endsWith('.zip')) score -= 2;
+    }
+    if (isLinux) {
+      if (name.includes('linux')) score -= 10;
+      if (!name.includes('.')) score -= 5;
+      if (name.endsWith('.tar.gz')) score -= 2;
+    }
+    if (isMac) {
+      if (name.includes('macos') || name.includes('darwin') || name.includes('osx')) score -= 10;
+      if (name.endsWith('.dmg') || name.endsWith('.pkg')) score -= 5;
+    }
+    if (isArm) {
+      if (name.includes('aarch64') || name.includes('arm64') || name.includes('arm')) score -= 8;
+    }
+    if (isX64) {
+      if (name.includes('x86_64') || name.includes('amd64') || name.includes('x64')) score -= 8;
+    }
+
+    return score;
+  };
+
+  return [...assets].sort((a, b) => rank(a) - rank(b));
 }
 
 /**
@@ -113,6 +166,14 @@ function saveSelection(gameId: string, sel: PersistedSelection) {
  */
 export function useGameReleases(game: Game | undefined) {
   const repo = useMemo(() => (game ? getGitHubRepo(game) : null), [game]);
+  const platform = useMemo<string | undefined>(() => {
+    if (typeof window === 'undefined') return undefined;
+    return (window as any).GetPlatform?.() as string | undefined;
+  }, []);
+  const arch = useMemo<string | undefined>(() => {
+    if (typeof window === 'undefined') return undefined;
+    return (window as any).GetArch?.() as string | undefined;
+  }, []);
   const [releases, setReleases] = useState<GameRelease[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -209,12 +270,18 @@ export function useGameReleases(game: Game | undefined) {
     return visibleReleases.find(r => r.tag === effectiveTag);
   }, [visibleReleases, effectiveTag]);
 
+  // Assets sorted by platform relevance (all preserved, most relevant first).
+  const sortedAssets = useMemo(
+    () => sortAssetsByRelevance(selectedRelease?.assets ?? [], platform, arch),
+    [selectedRelease, platform, arch],
+  );
+
   // Resolve the effective selected asset.
   const effectiveAsset = useMemo(() => {
     if (!selectedRelease || !game) return undefined;
     if (selectedAsset && selectedRelease.assets.some(a => a.name === selectedAsset)) return selectedAsset;
-    return pickDefaultAsset(game, selectedRelease.assets);
-  }, [selectedRelease, selectedAsset, game]);
+    return pickDefaultAsset(game, sortedAssets);
+  }, [selectedRelease, selectedAsset, game, sortedAssets]);
 
   const setSelectedTag = useCallback((tag: string | undefined) => {
     setSelectedTagState(tag);
@@ -237,6 +304,7 @@ export function useGameReleases(game: Game | undefined) {
     selectedTag: effectiveTag,
     selectedAsset: effectiveAsset,
     selectedRelease,
+    sortedAssets,
     setSelectedTag,
     setSelectedAsset,
   };

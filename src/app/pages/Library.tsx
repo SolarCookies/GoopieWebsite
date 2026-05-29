@@ -36,6 +36,7 @@ const statusColors: Record<Game['status'], string> = {
   Stable: 'bg-green-500 text-white',
   Playable: 'bg-white text-black',
   Enhanced: 'bg-blue-500 text-white',
+  External: 'bg-orange-500 text-white',
 };
 
 const statusDescriptions: Record<Game['status'], string> = {
@@ -43,9 +44,10 @@ const statusDescriptions: Record<Game['status'], string> = {
   Stable: '100% playable with no crashes',
   Playable: 'Very little crashes',
   Ingame: 'Very little crashes but has graphics issues',
+  External: 'Uses an external launcher download',
 };
 
-const EXPECTED_LAUNCHER_VERSION = 9;
+const EXPECTED_LAUNCHER_VERSION = 10;
 
 export function Library() {
   const { recompName: urlRecompName } = useParams<{ recompName: string }>();
@@ -663,7 +665,12 @@ export function Library() {
                               className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
                               onClick={() => {
                                 setAudioMuted(true);
-                                (window as any).Play(selectedGame.recompName, buildCvarArgs());
+                                (window as any).Play(
+                                  selectedGame.recompName,
+                                  buildCvarArgs(),
+                                  undefined,
+                                  selectedGame.setGameDataRootToAssets === true
+                                );
                               }}
                             >
                               <Play className="w-5 h-5 mr-2" />
@@ -975,7 +982,7 @@ export function Library() {
                         </div>
                       ) : exeUpdated ? (
                         <div className="flex flex-wrap gap-2">
-                          <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => { setAudioMuted(true); (window as any).Play(selectedGame.recompName, buildCvarArgs()); }}>
+                          <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => { setAudioMuted(true); (window as any).Play(selectedGame.recompName, buildCvarArgs(), undefined, selectedGame.setGameDataRootToAssets === true); }}>
                             <Play className="w-4 h-4 mr-1" /> Play
                           </Button>
                           {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
