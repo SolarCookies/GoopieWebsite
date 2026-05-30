@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import {
   signInWithPopup,
+  signInWithCredential,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   type User as FirebaseUser,
@@ -145,6 +147,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginWithGoogle = async (): Promise<string> => {
+    // Launcher path: window.GoogleSignIn is injected by the GoopieLauncher bridge shim.
+    if (typeof (window as any).GoogleSignIn === 'function') {
+      try {
+        (window as any).GoogleSignIn();
+
+        const result = await new Promise<{ status: string; accessToken?: string; message?: string }>(
+          (resolve) => {
+            const interval = setInterval(() => {
+              const r = (window as any).getGoogleSignInResult?.();
+              if (r && r.status !== 'pending' && r.status !== 'idle') {
+                clearInterval(interval);
+                clearTimeout(timeout);
+                resolve(r);
+              }
+            }, 500);
+            const timeout = setTimeout(() => {
+              clearInterval(interval);
+              resolve({ status: 'error', message: 'Sign-in timed out' });
+            }, 310_000);
+          },
+        );
+
+        if (result.status !== 'ok' || !result.accessToken) {
+          return result.message || 'Google sign-in failed';
+        }
+
+        const credential = GoogleAuthProvider.credential(null, result.accessToken);
+        const userCredential = await signInWithCredential(auth, credential);
+        const appUser = await getOrCreateUserDoc(userCredential.user);
+        setUser(appUser);
+        return 'ok';
+      } catch (err: any) {
+        return err.message || 'Google sign-in failed';
+      }
+    }
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const appUser = await getOrCreateUserDoc(result.user);
