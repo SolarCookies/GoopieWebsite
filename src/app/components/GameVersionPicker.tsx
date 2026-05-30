@@ -137,10 +137,7 @@ export function GameVersionPicker({
           <div className="grid grid-cols-2 gap-2 text-xs">
             <label className="flex flex-col gap-1">
               <span style={{ color: 'var(--theme-text-secondary)' }}>Version</span>
-              <Select
-                value={selectedTag ?? ''}
-                onValueChange={v => setSelectedTag(v || undefined)}
-              >
+              <Select value={selectedTag ?? ''} onValueChange={v => setSelectedTag(v || undefined)}>
                 <SelectTrigger size="sm" className="rounded border text-xs" style={selectStyle}>
                   <SelectValue />
                 </SelectTrigger>

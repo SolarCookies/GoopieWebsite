@@ -8,6 +8,7 @@ import { Markdown } from '../components/Markdown';
 import { useNews, type NewsPost, type NewsPostExtras } from '../data/useNews';
 import { useGameStore } from '../data/GameStore';
 import { useAuth } from '../auth/AuthContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 function formatDate(ms: number): string {
   if (!ms) return '';
@@ -796,19 +797,22 @@ function NewsEditorOverlay({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Linked recomp</label>
-              <select
-                value={form.recompId}
-                onChange={(e) => update('recompId', e.target.value)}
-                className="w-full px-3 py-2 rounded text-sm"
-                style={inputStyle}
+              <Select
+                value={form.recompId || '__none__'}
+                onValueChange={v => update('recompId', v === '__none__' ? '' : v)}
               >
-                <option value="">— None —</option>
-                {recompOptions.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.title}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full px-3 py-2 rounded text-sm" style={inputStyle}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={inputStyle}>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {recompOptions.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs mt-1" style={{ color: 'var(--theme-text-muted)' }}>
                 Optional. Adds a button on the post that links to the game page.
               </p>
