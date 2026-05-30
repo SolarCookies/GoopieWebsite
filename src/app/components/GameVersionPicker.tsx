@@ -3,10 +3,12 @@ import { Check, ChevronDown, Package } from 'lucide-react';
 import { Game } from '../types/game';
 import { GameRelease, InstalledInfo, ReleaseAsset } from '../data/useGameReleases';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface Props {
   game: Game;
   visibleReleases: GameRelease[];
+  sortedAssets: ReleaseAsset[];
   selectedTag: string | undefined;
   selectedAsset: string | undefined;
   setSelectedTag: (tag: string | undefined) => void;
@@ -22,7 +24,10 @@ interface Props {
 
 function shortBuildLabel(assetName: string, recompName: string): string {
   const lower = assetName.toLowerCase();
-  const stripped = lower.replace(new RegExp(`^${recompName.toLowerCase()}-?`), '').replace(/\.exe$/, '');
+  const stripped = lower
+    .replace(new RegExp(`^${recompName.toLowerCase()}-?`), '')
+    .replace(/\.tar\.gz$/, '')
+    .replace(/\.(exe|zip|7z)$/, '');
   const noArch = stripped.replace(/^windows-x64-?/, '');
   return noArch.length > 0 ? noArch : 'default';
 }
@@ -30,6 +35,7 @@ function shortBuildLabel(assetName: string, recompName: string): string {
 export function GameVersionPicker({
   game,
   visibleReleases,
+  sortedAssets,
   selectedTag,
   selectedAsset,
   setSelectedTag,
@@ -42,12 +48,6 @@ export function GameVersionPicker({
   compact,
 }: Props) {
   const [open, setOpen] = useState(false);
-
-  const selectedRelease = visibleReleases.find(r => r.tag === selectedTag);
-  const exeAssets: ReleaseAsset[] = (selectedRelease?.assets ?? []).filter(a =>
-    a.name.toLowerCase().endsWith('.exe') &&
-    a.name.toLowerCase().startsWith(game.recompName.toLowerCase()),
-  );
 
   const installedTagMatches = !!installed?.version && installed.version === selectedTag;
   const installedAssetMatches = !!installed?.asset && installed.asset === selectedAsset;
@@ -137,35 +137,40 @@ export function GameVersionPicker({
           <div className="grid grid-cols-2 gap-2 text-xs">
             <label className="flex flex-col gap-1">
               <span style={{ color: 'var(--theme-text-secondary)' }}>Version</span>
-              <select
+              <Select
                 value={selectedTag ?? ''}
-                onChange={e => setSelectedTag(e.target.value || undefined)}
-                className="rounded px-2 py-1 border outline-none"
-                style={selectStyle}
+                onValueChange={v => setSelectedTag(v || undefined)}
               >
-                {visibleReleases.map(r => (
-                  <option key={r.tag} value={r.tag}>
-                    {r.tag}{r.prerelease ? ' (nightly)' : ''}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" className="rounded border text-xs" style={selectStyle}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={selectStyle}>
+                  {visibleReleases.map(r => (
+                    <SelectItem key={r.tag} value={r.tag}>
+                      {r.tag}{r.prerelease ? ' (nightly)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
             <label className="flex flex-col gap-1">
               <span style={{ color: 'var(--theme-text-secondary)' }}>Build</span>
-              <select
+              <Select
                 value={selectedAsset ?? ''}
-                onChange={e => setSelectedAsset(e.target.value || undefined)}
-                className="rounded px-2 py-1 border outline-none"
-                style={selectStyle}
-                disabled={exeAssets.length === 0}
+                onValueChange={v => setSelectedAsset(v || undefined)}
+                disabled={sortedAssets.length === 0}
               >
-                {exeAssets.length === 0 && <option value="">No builds</option>}
-                {exeAssets.map(a => (
-                  <option key={a.name} value={a.name}>
-                    {shortBuildLabel(a.name, game.recompName)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" className="rounded border text-xs" style={selectStyle}>
+                  <SelectValue placeholder="No builds" />
+                </SelectTrigger>
+                <SelectContent style={selectStyle}>
+                  {sortedAssets.map(a => (
+                    <SelectItem key={a.name} value={a.name}>
+                      {shortBuildLabel(a.name, game.recompName)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
         )}

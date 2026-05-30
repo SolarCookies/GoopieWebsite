@@ -201,6 +201,7 @@ export function Library() {
     repo: githubRepo,
     releases: allReleases,
     visibleReleases,
+    sortedAssets,
     showNightlies,
     setShowNightlies,
     selectedTag,
@@ -759,6 +760,7 @@ export function Library() {
                           <GameVersionPicker
                             game={selectedGame}
                             visibleReleases={visibleReleases}
+                            sortedAssets={sortedAssets}
                             selectedTag={selectedTag}
                             selectedAsset={selectedAsset}
                             setSelectedTag={setSelectedTag}
@@ -1027,6 +1029,7 @@ export function Library() {
                           compact
                           game={selectedGame}
                           visibleReleases={visibleReleases}
+                          sortedAssets={sortedAssets}
                           selectedTag={selectedTag}
                           selectedAsset={selectedAsset}
                           setSelectedTag={setSelectedTag}
