@@ -188,6 +188,71 @@ export function buildReleaseDownloadPrefix(repo: string, tag: string): string {
   return `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/`;
 }
 
+/**
+ * Fetch and parse all non-draft releases for a GitHub repo, sorted
+ * newest-first by semver.  Results are cached in-memory and persisted to
+ * localStorage (with a `fetchedAt` timestamp) for RELEASES_CACHE_TTL_MS.
+ *
+ * GitHub's unauthenticated API rate-limits aggressively (HTTP 403). When a
+ * fetch fails, this falls back to the last known-good cache (in-memory or
+ * persisted) instead of throwing, so callers don't lose previously-shown
+ * releases — the fallback entry is marked `stale: true` so the UI can warn
+ * that the data may be outdated. Only throws when there's no cache at all.
+ */
+export async function fetchReleases(repo: string): Promise<GameRelease[]> {
+  const cached = releasesCache.get(repo) ?? loadPersistedReleases(repo);
+  if (cached && !cached.stale && Date.now() - cached.fetchedAt < RELEASES_CACHE_TTL_MS) {
+    releasesCache.set(repo, cached);
+    return [...cached.releases].sort(compareReleasesNewestFirst);
+  }
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=50`, {
+      headers: { 'Accept': 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const data: any[] = await res.json();
+    const list: GameRelease[] = (Array.isArray(data) ? data : [])
+      .filter(r => !r.draft)
+      .map(r => ({
+        tag: String(r.tag_name ?? ''),
+        name: String(r.name ?? r.tag_name ?? ''),
+        prerelease: !!r.prerelease,
+        publishedAt: r.published_at ?? r.created_at,
+        assets: Array.isArray(r.assets)
+          ? r.assets.map((a: any) => ({
+              name: String(a.name ?? ''),
+              url: String(a.browser_download_url ?? ''),
+              size: typeof a.size === 'number' ? a.size : undefined,
+            }))
+          : [],
+      }))
+      .filter(r => r.tag)
+      .sort(compareReleasesNewestFirst);
+    const entry: CachedReleases = { fetchedAt: Date.now(), releases: list, stale: false };
+    releasesCache.set(repo, entry);
+    savePersistedReleases(repo, entry);
+    return list;
+  } catch (e) {
+    const fallback = cached ?? loadPersistedReleases(repo);
+    if (fallback) {
+      const staleEntry: CachedReleases = { ...fallback, stale: true };
+      releasesCache.set(repo, staleEntry);
+      return [...fallback.releases].sort(compareReleasesNewestFirst);
+    }
+    throw e;
+  }
+}
+
+/**
+ * Peek at the in-memory cache metadata for a repo without triggering a fetch.
+ * Lets callers (e.g. `useGameReleases`) learn when the data they just
+ * received was actually fetched, and whether it's a stale fallback.
+ */
+export function getReleasesCacheInfo(repo: string): { fetchedAt: number; stale: boolean } | null {
+  const c = releasesCache.get(repo);
+  return c ? { fetchedAt: c.fetchedAt, stale: c.stale } : null;
+}
+
 export function getShowNightlies(): boolean {
   if (typeof window === 'undefined') return false;
   return window.localStorage.getItem(NIGHTLY_KEY) === '1';
@@ -274,73 +339,18 @@ export function useGameReleases(game: Game | undefined) {
       return;
     }
     let cancelled = false;
-
-    const useEntry = (entry: CachedReleases) => {
-      const sorted = [...entry.releases].sort(compareReleasesNewestFirst);
-      setReleases(sorted);
-      setReleasesStale(entry.stale);
-      setReleasesUpdatedAt(entry.fetchedAt);
-    };
-
-    // In-memory cache (resets on reload) takes priority when fresh and not stale.
-    const cached = releasesCache.get(repo);
-    if (cached && !cached.stale && Date.now() - cached.fetchedAt < RELEASES_CACHE_TTL_MS) {
-      useEntry(cached);
-      return;
-    }
-
-    // Seed from the persisted (localStorage) cache so a reloaded page has
-    // something to show immediately while we refetch in the background.
-    const persisted = cached ?? loadPersistedReleases(repo);
-    if (persisted) useEntry(persisted);
-
     setLoading(true);
     setError(null);
-    fetch(`https://api.github.com/repos/${repo}/releases?per_page=50`, {
-      headers: { 'Accept': 'application/vnd.github+json' },
-    })
-      .then(res => {
-        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-        return res.json();
-      })
-      .then((data: any[]) => {
+    fetchReleases(repo)
+      .then(list => {
         if (cancelled) return;
-        const list: GameRelease[] = (Array.isArray(data) ? data : [])
-          .filter(r => !r.draft)
-          .map(r => ({
-            tag: String(r.tag_name ?? ''),
-            name: String(r.name ?? r.tag_name ?? ''),
-            prerelease: !!r.prerelease,
-            publishedAt: r.published_at ?? r.created_at,
-            assets: Array.isArray(r.assets)
-              ? r.assets.map((a: any) => ({
-                  name: String(a.name ?? ''),
-                  url: String(a.browser_download_url ?? ''),
-                  size: typeof a.size === 'number' ? a.size : undefined,
-                }))
-              : [],
-          }))
-          .filter(r => r.tag)
-          .sort(compareReleasesNewestFirst);
-        const entry: CachedReleases = { fetchedAt: Date.now(), releases: list, stale: false };
-        releasesCache.set(repo, entry);
-        savePersistedReleases(repo, entry);
         setReleases(list);
-        setReleasesStale(false);
-        setReleasesUpdatedAt(entry.fetchedAt);
+        const info = getReleasesCacheInfo(repo);
+        setReleasesStale(info?.stale ?? false);
+        setReleasesUpdatedAt(info?.fetchedAt);
       })
       .catch(e => {
-        if (cancelled) return;
-        // GitHub errored (e.g. 403 rate-limit) — fall back to the last known-good
-        // releases (in-memory or persisted) instead of leaving the list empty.
-        const fallback = cached ?? loadPersistedReleases(repo);
-        if (fallback) {
-          const staleEntry: CachedReleases = { ...fallback, stale: true };
-          releasesCache.set(repo, staleEntry);
-          useEntry(staleEntry);
-        } else {
-          setError(e instanceof Error ? e.message : String(e));
-        }
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
