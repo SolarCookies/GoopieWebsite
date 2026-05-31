@@ -28,6 +28,7 @@
  * content is safe to render.
  */
 import { Fragment, type ReactNode } from 'react';
+import { isInLauncher, openExternal } from '../utils/externalLink';
 
 const SAFE_URL = /^https:\/\/[^\s)]+$/i;
 
@@ -82,18 +83,29 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     },
     {
       regex: /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/,
-      render: (m, k) => (
-        <a
-          key={k}
-          href={m[2]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:underline"
-          style={{ color: 'var(--theme-accent)' }}
-        >
-          {m[1]}
-        </a>
-      ),
+      render: (m, k) => {
+        const url = m[2];
+        return (
+          <a
+            key={k}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline"
+            style={{ color: 'var(--theme-accent)' }}
+            onClick={(e) => {
+              // Inside a launcher, target=_blank navigations are dropped by the
+              // webview.  Route through the bridge so the system browser opens.
+              if (isInLauncher()) {
+                e.preventDefault();
+                openExternal(url);
+              }
+            }}
+          >
+            {m[1]}
+          </a>
+        );
+      },
     },
     {
       regex: /!\[([^\]]*)\]\((https:\/\/[^\s)]+)\)/,

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { X, Save, Trash2, Plus, CheckCircle2, Clock, Eye } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useGameStore } from '../data/GameStore';
+import { isInLauncher, openExternal } from '../utils/externalLink';
 
 interface GameEditorProps {
   game: Game | null; // null = creating new
@@ -299,6 +300,12 @@ export function GameEditor({ game, onSave, onDelete, onClose, isNew, readOnly }:
                 rel="noopener noreferrer"
                 className="text-xs hover:underline"
                 style={{ color: 'var(--theme-accent)' }}
+                onClick={(e) => {
+                  if (isInLauncher()) {
+                    e.preventDefault();
+                    openExternal(`${window.location.origin}/#/markdown-reference`);
+                  }
+                }}
               >
                 Markdown reference ↗
               </Link>
