@@ -30,6 +30,7 @@ import { Markdown } from '../components/Markdown';
 import { useNews } from '../data/useNews';
 import { buildReleaseDownloadPrefix, pickDefaultAsset, readInstalledInfo, useGameReleases, type InstalledInfo } from '../data/useGameReleases';
 import { GameVersionPicker } from '../components/GameVersionPicker';
+import { isInLauncher, openExternal as openExternalUrl } from '../utils/externalLink';
 
 const statusColors: Record<Game['status'], string> = {
   Ingame: 'bg-red-500 text-white',
@@ -83,6 +84,14 @@ export function Library() {
   const [isCreating, setIsCreating] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [headerIdx, setHeaderIdx] = useState(0);
+  // Two-slot double-buffer for the header cross-fade.  Neither slot is ever
+  // keyed by src, so both stay mounted across game switches — the outgoing
+  // image fades out while the incoming image fades in.
+  const [slotA, setSlotA] = useState({ src: '' });
+  const [slotB, setSlotB] = useState({ src: '' });
+  const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A');
+  const activeSlotRef = useRef<'A' | 'B'>('A');
+  const pendingCrossfadeRef = useRef(0);
   const [chosenAudioUrl, setChosenAudioUrl] = useState<string | undefined>(undefined);
   const [isoInstalled, setIsoInstalled] = useState(false);
   const [isInCEF, setIsInCEF] = useState(false);
@@ -298,12 +307,37 @@ export function Library() {
     return Array.isArray(selectedGame.headerImage) ? selectedGame.headerImage : [selectedGame.headerImage];
   }, [selectedGame]);
 
-  // Reset header index when game changes
+  // Reset header index when the selected game changes
   useEffect(() => {
     setHeaderIdx(0);
   }, [selectedGameId]);
 
-  // Cycle header images every 7 seconds
+  // Cross-fade to the target header image whenever the game or rotation index
+  // changes.  We load the incoming src into the inactive slot first and only
+  // flip `activeSlot` once the image has decoded — so the outgoing image stays
+  // painted underneath until the new one is ready, producing a true cross-fade.
+  useEffect(() => {
+    const src = headerImages[headerIdx];
+    if (!src) return;
+    const token = ++pendingCrossfadeRef.current;
+    // Determine which slot is currently inactive and stage the new src there.
+    const incoming: 'A' | 'B' = activeSlotRef.current === 'A' ? 'B' : 'A';
+    if (incoming === 'A') setSlotA({ src }); else setSlotB({ src });
+    // Decode (browser may serve from cache if the splash gate pre-decoded it).
+    const img = new Image();
+    img.src = src;
+    const decodeP = typeof img.decode === 'function'
+      ? img.decode().catch(() => {})
+      : new Promise<void>(r => { img.complete ? r() : (img.onload = img.onerror = () => r()); });
+    decodeP.then(() => {
+      if (token !== pendingCrossfadeRef.current) return; // superseded by a newer request
+      activeSlotRef.current = incoming;
+      setActiveSlot(incoming);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGame?.id, headerIdx]);
+
+  // Cycle header images every 7 seconds (within a single game)
   useEffect(() => {
     if (headerImages.length <= 1) return;
     const timer = setInterval(() => {
@@ -550,16 +584,16 @@ export function Library() {
           <div className="flex-1 overflow-y-auto relative" >
           {selectedGame ? (
             <>
-              {/* Header Image */}
+              {/* Header Image — two persistent slots cross-fade on game/image change */}
               <div className="relative h-[200px] md:h-[500px] overflow-hidden z-10 ">
-                {headerImages.map((src, i) => (
+                {([{ id: 'A', slot: slotA }, { id: 'B', slot: slotB }] as const).map(({ id, slot }) => (
                   <img
-                    key={src}
-                    src={src}
+                    key={id}
+                    src={slot.src}
                     alt={selectedGame.title}
                     className="absolute inset-0 w-full h-full object-cover"
                     style={{
-                      opacity: i === headerIdx ? (('var(--theme-header-alpha)' as unknown) as number) : 0,
+                      opacity: activeSlot === id ? (('var(--theme-header-alpha)' as unknown) as number) : 0,
                       transition: 'opacity 1s ease-in-out',
                     }}
                   />
@@ -1344,7 +1378,19 @@ export function Library() {
             <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--theme-border)' }}>
               <h2 className="text-xl font-bold" style={{ color: 'var(--theme-text-primary)' }}>Edit Description</h2>
               <div className="flex items-center gap-2">
-                <Link to="/markdown-reference" target="_blank" rel="noopener noreferrer" className="text-xs hover:underline" style={{ color: 'var(--theme-accent)' }}>
+                <Link
+                  to="/markdown-reference"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs hover:underline"
+                  style={{ color: 'var(--theme-accent)' }}
+                  onClick={(e) => {
+                    if (isInLauncher()) {
+                      e.preventDefault();
+                      openExternalUrl(`${window.location.origin}/#/markdown-reference`);
+                    }
+                  }}
+                >
                   Markdown reference ↗
                 </Link>
                 <button onClick={() => setEditingDescription(false)} style={{ color: 'var(--theme-text-muted)' }}>
