@@ -404,6 +404,36 @@ export function Library() {
     };
   }, [updating, extracting, selectedGame]);
 
+  // Steady-state install-state refresh (1.5 s) while inside the launcher and
+  // not already in a fast-poll cycle.  This ensures that completing an ISO
+  // extraction (or any other native operation) is reflected without a manual
+  // page reload, even when the fast poll has already torn down its interval.
+  const steadyPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (steadyPollRef.current) clearInterval(steadyPollRef.current);
+    if (!isInCEF || !selectedGame) return;
+    steadyPollRef.current = setInterval(() => {
+      if (!updating && !extracting) checkState();
+    }, 1500);
+    return () => {
+      if (steadyPollRef.current) clearInterval(steadyPollRef.current);
+    };
+  }, [isInCEF, selectedGame, updating, extracting, checkState]);
+
+  // Re-check install state when the user returns to the window (e.g. after
+  // dismissing the native ISO file-picker).
+  useEffect(() => {
+    if (!isInCEF) return;
+    const onFocus = () => checkState();
+    const onVisible = () => { if (document.visibilityState === 'visible') checkState(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isInCEF, checkState]);
+
   // Persist audio mute preference across page loads.
   useEffect(() => {
     try { localStorage.setItem('goopie:audioMuted', audioMuted ? '1' : '0'); } catch { /* quota */ }
