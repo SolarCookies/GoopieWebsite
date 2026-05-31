@@ -1,11 +1,24 @@
 
   <!DOCTYPE html>
-  <html lang="en">
+  <html lang="en" style="background:#1b2838">
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <meta name="theme-color" content="#1b2838" />
       <link rel="icon" type="image/png" href="https://x02.me/i/G6QA.png" />
       <title>Goopie</title>
+
+      <!-- Redirect real deep paths into hash routes before React mounts.
+           Needed so that humans landing on /library/foo (served by the OG
+           proxy function for social embeds) end up at /#/library/foo. -->
+      <script>
+        (function () {
+          var p = location.pathname;
+          if (p !== '/' && !location.hash) {
+            location.replace('/#' + p + location.search);
+          }
+        })();
+      </script>
 
     <!-- Default Open Graph / social embed tags (game pages get dynamic ones via Cloud Function) -->
     <meta property="og:type" content="website" />
@@ -21,9 +34,9 @@
     <meta name="twitter:description" content="Browse and play recompiled Xbox 360 games on modern hardware. Community-driven launcher and library." />
     <meta name="twitter:image" content="https://x02.me/i/G6QA.png" />
     <meta name="description" content="Browse and play recompiled Xbox 360 games on modern hardware. Community-driven launcher and library." />
+
     <body>
       <div id="root"></div>
       <script type="module" src="/src/main.tsx"></script>
     </body>
   </html>
-  

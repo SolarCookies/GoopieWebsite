@@ -74,6 +74,8 @@ export function pickDefaultAsset(game: Pick<Game, 'recompName' | 'preferredAsset
   if (zip) return zip.name;
   const tgz = assets.find(a => a.name.toLowerCase().endsWith('.tar.gz'));
   if (tgz) return tgz.name;
+  const sz = assets.find(a => a.name.toLowerCase().endsWith('.7z'));
+  if (sz) return sz.name;
 
   return assets[0].name;
 }

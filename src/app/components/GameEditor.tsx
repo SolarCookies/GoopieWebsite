@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { Game, Platform, CVar, CVarType } from '../types/game';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { X, Save, Trash2, Plus, CheckCircle2, Clock, Eye } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useGameStore } from '../data/GameStore';
+import { isInLauncher, openExternal } from '../utils/externalLink';
 
 interface GameEditorProps {
   game: Game | null; // null = creating new
@@ -111,14 +114,14 @@ export function GameEditor({ game, onSave, onDelete, onClose, isNew, readOnly }:
             </div>
             <div>
               <label className={labelClass} style={labelStyle}>Status</label>
-              <select
-                value={form.status}
-                onChange={e => update('status', e.target.value as Game['status'])}
-                className="w-full rounded-md px-3 py-2 text-sm border outline-none"
-                style={inputStyle}
-              >
-                {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select value={form.status} onValueChange={v => update('status', v as Game['status'])}>
+                <SelectTrigger className="w-full rounded-md text-sm border" style={inputStyle}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={inputStyle}>
+                  {statusOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -291,15 +294,21 @@ export function GameEditor({ game, onSave, onDelete, onClose, isNew, readOnly }:
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className={labelClass} style={labelStyle}>Description *</label>
-              <a
-                href="/markdown-reference"
+              <Link
+                to="/markdown-reference"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs hover:underline"
                 style={{ color: 'var(--theme-accent)' }}
+                onClick={(e) => {
+                  if (isInLauncher()) {
+                    e.preventDefault();
+                    openExternal(`${window.location.origin}/#/markdown-reference`);
+                  }
+                }}
               >
                 Markdown reference ↗
-              </a>
+              </Link>
             </div>
             <textarea
               value={form.description}
@@ -512,33 +521,39 @@ export function GameEditor({ game, onSave, onDelete, onClose, isNew, readOnly }:
                       </div>
                       <div className="col-span-5 md:col-span-2">
                         <label className="text-xs mb-1 block" style={{ color: 'var(--theme-text-muted)' }}>Type</label>
-                        <select
+                        <Select
                           value={cv.type}
-                          onChange={e => {
-                            const t = e.target.value as CVarType;
+                          onValueChange={v => {
+                            const t = v as CVarType;
                             const def: number | boolean = t === 'Bool' ? false : 0;
                             updateCv({ type: t, defaultValue: def });
                           }}
-                          className="w-full rounded-md px-2 py-2 text-sm border outline-none"
-                          style={inputStyle}
                         >
-                          <option value="Int">Int</option>
-                          <option value="Float">Float</option>
-                          <option value="Bool">Bool</option>
-                        </select>
+                          <SelectTrigger className="w-full rounded-md text-sm border" style={inputStyle}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent style={inputStyle}>
+                            <SelectItem value="Int">Int</SelectItem>
+                            <SelectItem value="Float">Float</SelectItem>
+                            <SelectItem value="Bool">Bool</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="col-span-10 md:col-span-2">
                         <label className="text-xs mb-1 block" style={{ color: 'var(--theme-text-muted)' }}>Default</label>
                         {cv.type === 'Bool' ? (
-                          <select
+                          <Select
                             value={cv.defaultValue ? 'true' : 'false'}
-                            onChange={e => updateCv({ defaultValue: e.target.value === 'true' })}
-                            className="w-full rounded-md px-2 py-2 text-sm border outline-none"
-                            style={inputStyle}
+                            onValueChange={v => updateCv({ defaultValue: v === 'true' })}
                           >
-                            <option value="false">false</option>
-                            <option value="true">true</option>
-                          </select>
+                            <SelectTrigger className="w-full rounded-md text-sm border" style={inputStyle}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent style={inputStyle}>
+                              <SelectItem value="false">false</SelectItem>
+                              <SelectItem value="true">true</SelectItem>
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <Input
                             type="number"

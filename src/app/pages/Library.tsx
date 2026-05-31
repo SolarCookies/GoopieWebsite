@@ -30,6 +30,7 @@ import { Markdown } from '../components/Markdown';
 import { useNews } from '../data/useNews';
 import { buildReleaseDownloadPrefix, pickDefaultAsset, readInstalledInfo, useGameReleases, type InstalledInfo } from '../data/useGameReleases';
 import { GameVersionPicker } from '../components/GameVersionPicker';
+import { isInLauncher, isInTauriLauncher, openExternal as openExternalUrl } from '../utils/externalLink';
 
 const statusColors: Record<Game['status'], string> = {
   Ingame: 'bg-red-500 text-white',
@@ -75,12 +76,25 @@ export function Library() {
     return [];
   });
   const [audioKey, setAudioKey] = useState(0);
-  const [audioMuted, setAudioMuted] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(() => {
+    try { return localStorage.getItem('goopie:audioMuted') === '1'; } catch { return false; }
+  });
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [headerIdx, setHeaderIdx] = useState(0);
+  // Two-slot double-buffer for the header image swap.  Neither slot is ever
+  // keyed by src, so both stay mounted across game switches — the outgoing
+  // image stays painted while the incoming one decodes, then React flips
+  // activeSlot.  In browser/CEF the swap uses an opacity cross-fade; in the
+  // Tauri/WebKit launcher transitions are disabled (instant swap).
+  const isTauri = isInTauriLauncher();
+  const [slotA, setSlotA] = useState({ src: '' });
+  const [slotB, setSlotB] = useState({ src: '' });
+  const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A');
+  const activeSlotRef = useRef<'A' | 'B'>('A');
+  const pendingCrossfadeRef = useRef(0);
   const [chosenAudioUrl, setChosenAudioUrl] = useState<string | undefined>(undefined);
   const [isoInstalled, setIsoInstalled] = useState(false);
   const [isInCEF, setIsInCEF] = useState(false);
@@ -93,7 +107,9 @@ export function Library() {
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
   const [extractString, setExtractString] = useState('');
-  const [infoBannerDismissed, setInfoBannerDismissed] = useState(false);
+  const [infoBannerDismissed, setInfoBannerDismissed] = useState(() => {
+    try { return localStorage.getItem('goopie:infoBannerDismissed') === '1'; } catch { return false; }
+  });
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [showMobileDetail, setShowMobileDetail] = useState(false);
@@ -201,6 +217,7 @@ export function Library() {
     repo: githubRepo,
     releases: allReleases,
     visibleReleases,
+    sortedAssets,
     showNightlies,
     setShowNightlies,
     selectedTag,
@@ -293,12 +310,37 @@ export function Library() {
     return Array.isArray(selectedGame.headerImage) ? selectedGame.headerImage : [selectedGame.headerImage];
   }, [selectedGame]);
 
-  // Reset header index when game changes
+  // Reset header index when the selected game changes
   useEffect(() => {
     setHeaderIdx(0);
   }, [selectedGameId]);
 
-  // Cycle header images every 7 seconds
+  // Cross-fade to the target header image whenever the game or rotation index
+  // changes.  We load the incoming src into the inactive slot first and only
+  // flip `activeSlot` once the image has decoded — so the outgoing image stays
+  // painted underneath until the new one is ready, producing a true cross-fade.
+  useEffect(() => {
+    const src = headerImages[headerIdx];
+    if (!src) return;
+    const token = ++pendingCrossfadeRef.current;
+    // Determine which slot is currently inactive and stage the new src there.
+    const incoming: 'A' | 'B' = activeSlotRef.current === 'A' ? 'B' : 'A';
+    if (incoming === 'A') setSlotA({ src }); else setSlotB({ src });
+    // Decode before swap to avoid a white flash.
+    const img = new Image();
+    img.src = src;
+    const decodeP = typeof img.decode === 'function'
+      ? img.decode().catch(() => {})
+      : new Promise<void>(r => { img.complete ? r() : (img.onload = img.onerror = () => r()); });
+    decodeP.then(() => {
+      if (token !== pendingCrossfadeRef.current) return; // superseded by a newer request
+      activeSlotRef.current = incoming;
+      setActiveSlot(incoming);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGame?.id, headerIdx]);
+
+  // Cycle header images every 7 seconds (within a single game)
   useEffect(() => {
     if (headerImages.length <= 1) return;
     const timer = setInterval(() => {
@@ -398,6 +440,46 @@ export function Library() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [updating, extracting, selectedGame]);
+
+  // Steady-state install-state refresh (1.5 s) while inside the launcher and
+  // not already in a fast-poll cycle.  This ensures that completing an ISO
+  // extraction (or any other native operation) is reflected without a manual
+  // page reload, even when the fast poll has already torn down its interval.
+  const steadyPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (steadyPollRef.current) clearInterval(steadyPollRef.current);
+    if (!isInCEF || !selectedGame) return;
+    steadyPollRef.current = setInterval(() => {
+      if (!updating && !extracting) checkState();
+    }, 1500);
+    return () => {
+      if (steadyPollRef.current) clearInterval(steadyPollRef.current);
+    };
+  }, [isInCEF, selectedGame, updating, extracting, checkState]);
+
+  // Re-check install state when the user returns to the window (e.g. after
+  // dismissing the native ISO file-picker).
+  useEffect(() => {
+    if (!isInCEF) return;
+    const onFocus = () => checkState();
+    const onVisible = () => { if (document.visibilityState === 'visible') checkState(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isInCEF, checkState]);
+
+  // Persist audio mute preference across page loads.
+  useEffect(() => {
+    try { localStorage.setItem('goopie:audioMuted', audioMuted ? '1' : '0'); } catch { /* quota */ }
+  }, [audioMuted]);
+
+  // Persist piracy-banner dismissal across page loads.
+  useEffect(() => {
+    try { localStorage.setItem('goopie:infoBannerDismissed', infoBannerDismissed ? '1' : '0'); } catch { /* quota */ }
+  }, [infoBannerDismissed]);
 
   const handleSelectGame = useCallback((id: string) => {
     setSelectedGameId(id);
@@ -505,17 +587,18 @@ export function Library() {
           <div className="flex-1 overflow-y-auto relative" >
           {selectedGame ? (
             <>
-              {/* Header Image */}
+              {/* Header Image — two persistent slots swap on game/image change.
+                  Browser/CEF: 1 s opacity cross-fade.  Tauri: instant (no transition). */}
               <div className="relative h-[200px] md:h-[500px] overflow-hidden z-10 ">
-                {headerImages.map((src, i) => (
+                {([{ id: 'A', slot: slotA }, { id: 'B', slot: slotB }] as const).map(({ id, slot }) => (
                   <img
-                    key={src}
-                    src={src}
+                    key={id}
+                    src={slot.src}
                     alt={selectedGame.title}
                     className="absolute inset-0 w-full h-full object-cover"
                     style={{
-                      opacity: i === headerIdx ? (('var(--theme-header-alpha)' as unknown) as number) : 0,
-                      transition: 'opacity 1s ease-in-out',
+                      opacity: activeSlot === id ? (('var(--theme-header-alpha)' as unknown) as number) : 0,
+                      transition: isTauri ? undefined : 'opacity 1s ease-in-out',
                     }}
                   />
                 ))}
@@ -759,6 +842,7 @@ export function Library() {
                           <GameVersionPicker
                             game={selectedGame}
                             visibleReleases={visibleReleases}
+                            sortedAssets={sortedAssets}
                             selectedTag={selectedTag}
                             selectedAsset={selectedAsset}
                             setSelectedTag={setSelectedTag}
@@ -1027,6 +1111,7 @@ export function Library() {
                           compact
                           game={selectedGame}
                           visibleReleases={visibleReleases}
+                          sortedAssets={sortedAssets}
                           selectedTag={selectedTag}
                           selectedAsset={selectedAsset}
                           setSelectedTag={setSelectedTag}
@@ -1297,9 +1382,21 @@ export function Library() {
             <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--theme-border)' }}>
               <h2 className="text-xl font-bold" style={{ color: 'var(--theme-text-primary)' }}>Edit Description</h2>
               <div className="flex items-center gap-2">
-                <a href="/markdown-reference" target="_blank" rel="noopener noreferrer" className="text-xs hover:underline" style={{ color: 'var(--theme-accent)' }}>
+                <Link
+                  to="/markdown-reference"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs hover:underline"
+                  style={{ color: 'var(--theme-accent)' }}
+                  onClick={(e) => {
+                    if (isInLauncher()) {
+                      e.preventDefault();
+                      openExternalUrl(`${window.location.origin}/#/markdown-reference`);
+                    }
+                  }}
+                >
                   Markdown reference ↗
-                </a>
+                </Link>
                 <button onClick={() => setEditingDescription(false)} style={{ color: 'var(--theme-text-muted)' }}>
                   <X className="w-5 h-5" />
                 </button>
