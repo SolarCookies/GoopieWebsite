@@ -326,7 +326,7 @@ export function Library() {
     // Determine which slot is currently inactive and stage the new src there.
     const incoming: 'A' | 'B' = activeSlotRef.current === 'A' ? 'B' : 'A';
     if (incoming === 'A') setSlotA({ src }); else setSlotB({ src });
-    // Decode (browser may serve from cache if the splash gate pre-decoded it).
+    // Decode before swap to avoid a white flash.
     const img = new Image();
     img.src = src;
     const decodeP = typeof img.decode === 'function'

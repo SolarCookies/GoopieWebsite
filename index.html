@@ -35,28 +35,7 @@
     <meta name="twitter:image" content="https://x02.me/i/G6QA.png" />
     <meta name="description" content="Browse and play recompiled Xbox 360 games on modern hardware. Community-driven launcher and library." />
 
-    <!-- Splash: shown instantly, removed when React mounts (#root becomes non-empty) -->
-    <style>
-      #splash {
-        position: fixed;
-        inset: 0;
-        background: #1b2838;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        transition: opacity 0.3s ease;
-      }
-      #splash.fade-out {
-        opacity: 0;
-        pointer-events: none;
-      }
-    </style>
-
     <body>
-      <div id="splash">
-        <img src="https://x02.me/i/G6QA.png" width="72" height="72" alt="Goopie" style="border-radius:12px;opacity:0.9" />
-      </div>
       <div id="root"></div>
       <script type="module" src="/src/main.tsx"></script>
     </body>
