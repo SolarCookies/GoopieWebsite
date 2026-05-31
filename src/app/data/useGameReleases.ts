@@ -160,6 +160,41 @@ export function buildReleaseDownloadPrefix(repo: string, tag: string): string {
   return `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/`;
 }
 
+/**
+ * Fetch and parse all non-draft releases for a GitHub repo, sorted
+ * newest-first by semver.  Results are cached for RELEASES_CACHE_TTL_MS.
+ */
+export async function fetchReleases(repo: string): Promise<GameRelease[]> {
+  const cached = releasesCache.get(repo);
+  if (cached && Date.now() - cached.fetchedAt < RELEASES_CACHE_TTL_MS) {
+    return [...cached.releases].sort(compareReleasesNewestFirst);
+  }
+  const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=50`, {
+    headers: { 'Accept': 'application/vnd.github+json' },
+  });
+  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+  const data: any[] = await res.json();
+  const list: GameRelease[] = (Array.isArray(data) ? data : [])
+    .filter(r => !r.draft)
+    .map(r => ({
+      tag: String(r.tag_name ?? ''),
+      name: String(r.name ?? r.tag_name ?? ''),
+      prerelease: !!r.prerelease,
+      publishedAt: r.published_at ?? r.created_at,
+      assets: Array.isArray(r.assets)
+        ? r.assets.map((a: any) => ({
+            name: String(a.name ?? ''),
+            url: String(a.browser_download_url ?? ''),
+            size: typeof a.size === 'number' ? a.size : undefined,
+          }))
+        : [],
+    }))
+    .filter(r => r.tag)
+    .sort(compareReleasesNewestFirst);
+  releasesCache.set(repo, { fetchedAt: Date.now(), releases: list });
+  return list;
+}
+
 export function getShowNightlies(): boolean {
   if (typeof window === 'undefined') return false;
   return window.localStorage.getItem(NIGHTLY_KEY) === '1';
@@ -242,46 +277,14 @@ export function useGameReleases(game: Game | undefined) {
       return;
     }
     let cancelled = false;
-    const cached = releasesCache.get(repo);
-    if (cached && Date.now() - cached.fetchedAt < RELEASES_CACHE_TTL_MS) {
-      // Re-sort in case the cached data pre-dates the semver sort.
-      setReleases([...cached.releases].sort(compareReleasesNewestFirst));
-      return;
-    }
     setLoading(true);
     setError(null);
-    fetch(`https://api.github.com/repos/${repo}/releases?per_page=50`, {
-      headers: { 'Accept': 'application/vnd.github+json' },
-    })
-      .then(res => {
-        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-        return res.json();
-      })
-      .then((data: any[]) => {
-        if (cancelled) return;
-        const list: GameRelease[] = (Array.isArray(data) ? data : [])
-          .filter(r => !r.draft)
-          .map(r => ({
-            tag: String(r.tag_name ?? ''),
-            name: String(r.name ?? r.tag_name ?? ''),
-            prerelease: !!r.prerelease,
-            publishedAt: r.published_at ?? r.created_at,
-            assets: Array.isArray(r.assets)
-              ? r.assets.map((a: any) => ({
-                  name: String(a.name ?? ''),
-                  url: String(a.browser_download_url ?? ''),
-                  size: typeof a.size === 'number' ? a.size : undefined,
-                }))
-              : [],
-          }))
-          .filter(r => r.tag)
-          .sort(compareReleasesNewestFirst);
-        releasesCache.set(repo, { fetchedAt: Date.now(), releases: list });
-        setReleases(list);
+    fetchReleases(repo)
+      .then(list => {
+        if (!cancelled) setReleases(list);
       })
       .catch(e => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

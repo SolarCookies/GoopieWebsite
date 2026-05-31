@@ -3,7 +3,7 @@ import { GameList } from '../components/GameList';
 import { TopBar } from '../components/TopBar';
 import { Sidebar, SIDEBAR_WIDTH_CLASS } from '../components/Sidebar';
 import { GameEditor } from '../components/GameEditor';
-import { Play, FolderOpen, Trash2, Download, RefreshCw, Globe, ExternalLink, AlertTriangle, Pencil, EyeOff, Eye, Info, Save, X, Bug, ArrowLeft, Star, ChevronDown, Newspaper, Car } from 'lucide-react';
+import { Play, FolderOpen, Trash2, Download, RefreshCw, Globe, ExternalLink, AlertTriangle, Loader2, Pencil, EyeOff, Eye, Info, Save, X, Bug, ArrowLeft, Star, ChevronDown, Newspaper, Car } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
@@ -47,8 +47,6 @@ const statusDescriptions: Record<Game['status'], string> = {
   Ingame: 'Very little crashes but has graphics issues',
   External: 'Uses an external launcher download',
 };
-
-const EXPECTED_LAUNCHER_VERSION = 10;
 
 export function Library() {
   const { recompName: urlRecompName } = useParams<{ recompName: string }>();
@@ -99,6 +97,9 @@ export function Library() {
   const [isoInstalled, setIsoInstalled] = useState(false);
   const [isInCEF, setIsInCEF] = useState(false);
   const [launcherOutdated, setLauncherOutdated] = useState(false);
+  const [latestLauncherVersion, setLatestLauncherVersion] = useState<string | null>(null);
+  const [canSelfUpdate, setCanSelfUpdate] = useState(false);
+  const [updatingLauncher, setUpdatingLauncher] = useState(false);
   const [exeUpdated, setExeUpdated] = useState(false);
   const [needsUpdate, setNeedsUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -405,10 +406,14 @@ export function Library() {
     const w = window as any;
     if (w.getVersion) {
       const version = w.getVersion();
-      const validVersion = typeof version === 'number' && isFinite(version);
-      setIsInCEF(validVersion);
-      if (validVersion) {
-        setLauncherOutdated(version < EXPECTED_LAUNCHER_VERSION);
+      setIsInCEF(typeof version === 'string');
+      setCanSelfUpdate(!!w.SelfUpdateLauncher);
+      if (w.CheckForLauncherUpdate) {
+        const info = w.CheckForLauncherUpdate();
+        if (info?.hasUpdate) {
+          setLauncherOutdated(true);
+          setLatestLauncherVersion(info.latestVersion ?? null);
+        }
       }
     }
   }, []);
@@ -424,9 +429,13 @@ export function Library() {
 
   // Poll progress while updating or extracting
   useEffect(() => {
-    if (updating || extracting) {
+    if (updating || extracting || updatingLauncher) {
       pollRef.current = setInterval(() => {
         const w = window as any;
+        if (updatingLauncher) {
+          setDownloadProgress(w.getDownloadProgress ? w.getDownloadProgress() : 0);
+          setDownloadString(w.getDownloadString ? w.getDownloadString() : '');
+        }
         if (selectedGame) {
           // Update check
           const isUp = w.isUpdating ? w.isUpdating(selectedGame.id) : false;
@@ -454,7 +463,7 @@ export function Library() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [updating, extracting, selectedGame]);
+  }, [updating, extracting, updatingLauncher, selectedGame]);
 
   // Steady-state install-state refresh (1.5 s) while inside the launcher and
   // not already in a fast-poll cycle.  This ensures that completing an ISO
@@ -534,18 +543,40 @@ export function Library() {
     <div className={`flex h-screen flex-col relative ${SIDEBAR_WIDTH_CLASS}`} style={{ backgroundColor: 'var(--theme-page-bg)' }}>
       <Sidebar />
       {launcherOutdated && (
-        <div
-          className="bg-[#b8860b] px-4 md:px-6 py-2 md:py-3 flex items-center justify-center gap-2 md:gap-3 relative z-10 cursor-pointer hover:bg-[#cfa52a] transition-colors"
-          onClick={() => openExternal('https://goopie.xyz/')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openExternal('https://goopie.xyz/'); }}
-          title="Download the latest launcher"
-        >
-          <AlertTriangle className="w-5 h-5 text-white shrink-0" />
-          <span className="text-white font-semibold text-xs md:text-sm">
-            Your launcher is outdated. Please download the latest version from <span className="underline">goopie.xyz</span>
-          </span>
+        <div className="bg-[#b8860b] px-4 md:px-6 py-2 md:py-3 flex items-center justify-center gap-2 md:gap-3 relative z-10">
+          {updatingLauncher ? (
+            <>
+              <Loader2 className="w-4 h-4 text-white shrink-0 animate-spin" />
+              <span className="text-white font-semibold text-xs md:text-sm">
+                Updating launcher… {downloadProgress > 0 ? `${downloadProgress}%` : ''}{downloadString ? ` (${downloadString})` : ''}
+              </span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="w-5 h-5 text-white shrink-0" />
+              <span className="text-white font-semibold text-xs md:text-sm">
+                Your launcher is outdated{latestLauncherVersion ? ` (${latestLauncherVersion} available)` : ''}.
+              </span>
+              {canSelfUpdate ? (
+                <button
+                  className="text-white underline font-bold text-xs md:text-sm hover:text-yellow-200 transition-colors"
+                  onClick={() => {
+                    (window as any).SelfUpdateLauncher();
+                    setUpdatingLauncher(true);
+                  }}
+                >
+                  Update now
+                </button>
+              ) : (
+                <a
+                  className="text-white underline font-bold text-xs md:text-sm hover:text-yellow-200 transition-colors cursor-pointer"
+                  onClick={() => openExternal('https://goopie.xyz/')}
+                >
+                  Download at goopie.xyz
+                </a>
+              )}
+            </>
+          )}
         </div>
       )}
       {!infoBannerDismissed && (
