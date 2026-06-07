@@ -28,7 +28,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 import { BackgroundAudioPlayer } from '../components/BackgroundAudioPlayer';
 import { Markdown } from '../components/Markdown';
 import { useNews } from '../data/useNews';
-import { buildReleaseDownloadPrefix, pickDefaultAsset, sortAssetsByRelevance, readInstalledInfo, useGameReleases, type InstalledInfo } from '../data/useGameReleases';
+import { buildReleaseDownloadPrefix, pickDefaultAsset, sortAssetsByRelevance, readInstalledBuilds, findInstalledBuild, useGameReleases, type InstalledBuild } from '../data/useGameReleases';
 import { GameVersionPicker } from '../components/GameVersionPicker';
 import { isInLauncher, isInTauriLauncher, openExternal as openExternalUrl } from '../utils/externalLink';
 
@@ -47,6 +47,53 @@ const statusDescriptions: Record<Game['status'], string> = {
   Ingame: 'Very little crashes but has graphics issues',
   External: 'Uses an external launcher download',
 };
+
+/**
+ * Lists every locally-installed build of the selected game (each living in
+ * its own `builds/<tag>/` directory), with per-build Play / Remove actions --
+ * letting the user manage builds individually rather than only the one
+ * currently targeted by the version picker. Hidden when nothing is installed.
+ */
+function InstalledBuildsList({
+  builds,
+  onPlay,
+  onRemove,
+  compact,
+}: {
+  builds: InstalledBuild[];
+  onPlay: (build: InstalledBuild) => void;
+  onRemove: (build: InstalledBuild) => void;
+  compact?: boolean;
+}) {
+  if (builds.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <span className={`font-semibold uppercase tracking-wide ${compact ? 'text-[10px]' : 'text-xs'}`} style={{ color: 'var(--theme-text-muted)' }}>
+        Installed builds
+      </span>
+      {builds.map(build => (
+        <div
+          key={build.name}
+          className={`flex items-center justify-between gap-2 rounded-md ${compact ? 'px-2 py-1.5' : 'px-3 py-2'}`}
+          style={{ backgroundColor: 'var(--theme-page-bg)' }}
+        >
+          <span className={`truncate ${compact ? 'text-xs' : 'text-sm'}`} style={{ color: 'var(--theme-text-primary)' }}>
+            {build.version || build.name}
+            {build.asset ? ` · ${build.asset}` : ''}
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button variant="ghost" size="icon" title="Play this build" onClick={() => onPlay(build)}>
+              <Play className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+            </Button>
+            <Button variant="ghost" size="icon" title="Remove this build" onClick={() => onRemove(build)}>
+              <Trash2 className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function Library() {
   const { recompName: urlRecompName } = useParams<{ recompName: string }>();
@@ -232,7 +279,17 @@ export function Library() {
     platform: launcherPlatform,
     arch: launcherArch,
   } = releasesState;
-  const [installedInfo, setInstalledInfo] = useState<InstalledInfo | null>(null);
+  // Every build of the selected game that is currently installed in its own
+  // `builds/<tag>/` directory (see games.rs::get_installed_builds). Multiple
+  // builds can coexist side-by-side now that updates no longer overwrite.
+  const [installedBuilds, setInstalledBuilds] = useState<InstalledBuild[]>([]);
+
+  // The installed build matching the user's current version-picker selection
+  // (if any) -- i.e. the build that Play/Uninstall/Update should target.
+  const selectedBuild = useMemo(
+    () => findInstalledBuild(installedBuilds, selectedTag, selectedAsset),
+    [installedBuilds, selectedTag, selectedAsset],
+  );
 
   // Compute the download URL prefix passed to the launcher's Update().
   const releaseDownloadPrefix = useMemo(() => {
@@ -248,35 +305,39 @@ export function Library() {
     return selectedGame?.githubApiUrl ?? '';
   }, [githubRepo, selectedTag, selectedGame?.githubApiUrl]);
 
-  // Treat a build/version mismatch with what's installed as needing an update.
+  // With per-build directories, picking a tag/asset that isn't installed no
+  // longer means "needs an update" -- it means "install this as a new,
+  // separate build". `selectionMismatch` now flags exactly that: the user has
+  // *some* build(s) installed, but none matches their current selection, so
+  // the action button should read "Install" (a fresh side-by-side install)
+  // rather than "Update" (refresh the selected build in place).
   const selectionMismatch = useMemo(() => {
-    if (!installedInfo) return false;
-    if (selectedTag && installedInfo.version && installedInfo.version !== selectedTag) return true;
-    if (selectedAsset && installedInfo.asset && installedInfo.asset !== selectedAsset) return true;
-    return false;
-  }, [installedInfo, selectedTag, selectedAsset]);
+    if (installedBuilds.length === 0) return false;
+    return !selectedBuild;
+  }, [installedBuilds, selectedBuild]);
 
-  // Detect when a newer release is available than what is currently installed,
-  // as long as the user has not explicitly pinned to a different (older) version.
-  // Respects the installed channel: a nightly install only upgrades to a newer
-  // nightly; a stable install only upgrades to a newer stable release.
+  // Detect when a newer release is available than the currently selected
+  // (and installed) build, as long as the user has not explicitly pinned to a
+  // different (older) version. Respects the installed channel: a nightly
+  // install only upgrades to a newer nightly; a stable install only upgrades
+  // to a newer stable release.
   const newerReleaseAvailable = useMemo(() => {
-    if (!installedInfo?.version) return false;
+    if (!selectedBuild?.version) return false;
     // If the user has explicitly pinned to a different version than installed,
-    // selectionMismatch already handles showing the update button.
-    if (selectedTag && installedInfo.version !== selectedTag) return false;
-    const installedIsNightly = allReleases.find(r => r.tag === installedInfo.version)?.prerelease ?? false;
+    // selectionMismatch already handles showing the install/update button.
+    if (selectedTag && selectedBuild.version !== selectedTag) return false;
+    const installedIsNightly = allReleases.find(r => r.tag === selectedBuild.version)?.prerelease ?? false;
     const candidates = allReleases.filter(r => r.prerelease === installedIsNightly);
     const latestTag = candidates[0]?.tag;
-    return !!latestTag && latestTag !== installedInfo.version;
-  }, [installedInfo, selectedTag, allReleases]);
+    return !!latestTag && latestTag !== selectedBuild.version;
+  }, [selectedBuild, selectedTag, allReleases]);
 
   // When a newer version is available (and the user hasn't pinned to a different
   // version), resolve update targets to the correct channel; otherwise fall back
   // to whatever the user has currently selected.
   const updateInfo = useMemo(() => {
     if (newerReleaseAvailable && githubRepo && selectedGame) {
-      const installedIsNightly = allReleases.find(r => r.tag === installedInfo?.version)?.prerelease ?? false;
+      const installedIsNightly = allReleases.find(r => r.tag === selectedBuild?.version)?.prerelease ?? false;
       const target = allReleases.filter(r => r.prerelease === installedIsNightly)[0];
       if (target) {
         const targetSorted = sortAssetsByRelevance(target.assets, launcherPlatform, launcherArch);
@@ -300,7 +361,7 @@ export function Library() {
       }
     }
     return { tag: selectedTag, prefix: releaseDownloadPrefix, asset: selectedAsset };
-  }, [newerReleaseAvailable, githubRepo, allReleases, installedInfo, selectedGame, selectedTag, releaseDownloadPrefix, selectedAsset, launcherPlatform, launcherArch]);
+  }, [newerReleaseAvailable, githubRepo, allReleases, selectedBuild, selectedGame, selectedTag, releaseDownloadPrefix, selectedAsset, launcherPlatform, launcherArch]);
 
   const triggerUpdate = useCallback(() => {
     if (!selectedGame) return;
@@ -381,9 +442,14 @@ export function Library() {
     const w = window as any;
     if (selectedGame) {
       setIsoInstalled(w.isIsoInstalled ? w.isIsoInstalled(selectedGame.recompName) : false);
-      setExeUpdated(w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName) : false);
-      setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, releaseApiUrl, selectedAsset ?? '') : false);
-      setInstalledInfo(readInstalledInfo(selectedGame.recompName));
+      // Re-read the full set of installed builds, then resolve the one
+      // matching the current version-picker selection (if any) -- that's the
+      // build whose exe/update status we report and that Play/Uninstall act on.
+      const builds = readInstalledBuilds(selectedGame.recompName);
+      setInstalledBuilds(builds);
+      const matching = findInstalledBuild(builds, selectedTag, selectedAsset);
+      setExeUpdated(matching && w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName, matching.name) : false);
+      setNeedsUpdate(matching && w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, matching.name, releaseApiUrl, selectedAsset ?? '') : false);
       const isUp = w.isUpdating ? w.isUpdating(selectedGame.id) : false;
       setUpdating(isUp);
       if (isUp) {
@@ -397,11 +463,31 @@ export function Library() {
         setExtractString(w.getExtractString ? w.getExtractString(selectedGame.id) : 'Extracting...');
       }
     }
-  }, [selectedGame, releaseApiUrl, selectedAsset]);
+  }, [selectedGame, releaseApiUrl, selectedTag, selectedAsset]);
 
   useEffect(() => {
     checkState();
   }, [checkState]);
+
+  // Launch a specific installed build directly (used by the "Installed builds"
+  // list, independent of whichever build the version picker currently targets).
+  const playBuild = useCallback((build: InstalledBuild) => {
+    if (!selectedGame) return;
+    const w = window as any;
+    if (typeof w.Play !== 'function') return;
+    setAudioMuted(true);
+    w.Play(selectedGame.recompName, build.name, buildCvarArgs(), undefined, selectedGame.setGameDataRootToAssets === true);
+  }, [selectedGame, buildCvarArgs]);
+
+  // Remove a single installed build's directory (leaves saves/assets and any
+  // other installed builds of the same game untouched).
+  const removeBuild = useCallback((build: InstalledBuild) => {
+    if (!selectedGame) return;
+    const w = window as any;
+    if (typeof w.Uninstall !== 'function') return;
+    w.Uninstall(selectedGame.recompName, build.name);
+    checkState();
+  }, [selectedGame, checkState]);
 
   // Check launcher version on mount
   useEffect(() => {
@@ -446,9 +532,11 @@ export function Library() {
             setDownloadProgress(w.getDownloadProgress ? w.getDownloadProgress(selectedGame.id) : 0);
             setDownloadString(w.getDownloadString ? w.getDownloadString(selectedGame.id) : '');
           } else {
-            setExeUpdated(w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName) : false);
-            setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, releaseApiUrl, selectedAsset ?? '') : false);
-            setInstalledInfo(readInstalledInfo(selectedGame.recompName));
+            const builds = readInstalledBuilds(selectedGame.recompName);
+            setInstalledBuilds(builds);
+            const matching = findInstalledBuild(builds, selectedTag, selectedAsset);
+            setExeUpdated(matching && w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName, matching.name) : false);
+            setNeedsUpdate(matching && w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, matching.name, releaseApiUrl, selectedAsset ?? '') : false);
           }
           // Extract check
           const isExt = w.isExtracting ? w.isExtracting(selectedGame.id) : false;
@@ -465,7 +553,7 @@ export function Library() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [updating, extracting, updatingLauncher, selectedGame]);
+  }, [updating, extracting, updatingLauncher, selectedGame, selectedTag, selectedAsset]);
 
   // Steady-state install-state refresh (1.5 s) while inside the launcher and
   // not already in a fast-poll cycle.  This ensures that completing an ISO
@@ -790,19 +878,11 @@ export function Library() {
                             <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>{downloadString}</p>
                           </div>
                         ) : exeUpdated ? (
-                          /* Ready to play */
+                          /* Selected build is installed and ready to play */
                           <div className="flex flex-wrap gap-3">
                             <Button
                               className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
-                              onClick={() => {
-                                setAudioMuted(true);
-                                (window as any).Play(
-                                  selectedGame.recompName,
-                                  buildCvarArgs(),
-                                  undefined,
-                                  selectedGame.setGameDataRootToAssets === true
-                                );
-                              }}
+                              onClick={() => selectedBuild && playBuild(selectedBuild)}
                             >
                               <Play className="w-5 h-5 mr-2" />
                               Play
@@ -813,19 +893,18 @@ export function Library() {
                                 onClick={triggerUpdate}
                               >
                                 <Download className="w-5 h-5 mr-2" />
-                                Update
+                                {selectedBuild ? 'Update' : 'Install'}
                               </Button>
                             )}
-                            <Button
-                              className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
-                              onClick={() => {
-                                (window as any).Uninstall(selectedGame.recompName);
-                                checkState();
-                              }}
-                            >
-                              <Trash2 className="w-5 h-5 mr-2" />
-                              Uninstall
-                            </Button>
+                            {selectedBuild && (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
+                                onClick={() => removeBuild(selectedBuild)}
+                              >
+                                <Trash2 className="w-5 h-5 mr-2" />
+                                Uninstall
+                              </Button>
+                            )}
                             {!selectedGame.disableSaveManager && (
                             <Button
                               className="text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
@@ -850,25 +929,26 @@ export function Library() {
                             */}
                           </div>
                         ) : (
-                          /* Needs update */
+                          /* Selected build isn't installed yet, or its exe is stale --
+                             either way the action installs it into its own build dir
+                             without touching any other installed build. */
                           <div className="flex flex-wrap gap-3">
                             <Button
                               className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
                               onClick={triggerUpdate}
                             >
                               <Download className="w-5 h-5 mr-2" />
-                              Update
+                              {selectedBuild ? 'Update' : 'Install'}
                             </Button>
-                            <Button
-                              className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
-                              onClick={() => {
-                                (window as any).Uninstall(selectedGame.recompName);
-                                checkState();
-                              }}
-                            >
-                              <Trash2 className="w-5 h-5 mr-2" />
-                              Uninstall
-                            </Button>
+                            {selectedBuild && (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
+                                onClick={() => removeBuild(selectedBuild)}
+                              >
+                                <Trash2 className="w-5 h-5 mr-2" />
+                                Uninstall
+                              </Button>
+                            )}
                           </div>
                         )
                       ) : (
@@ -897,12 +977,13 @@ export function Library() {
                             setSelectedAsset={setSelectedAsset}
                             showNightlies={showNightlies}
                             setShowNightlies={setShowNightlies}
-                            installed={installedInfo}
+                            installed={selectedBuild}
                             loading={releasesLoading}
                             error={releasesError}
                             stale={releasesStale}
                             updatedAt={releasesUpdatedAt}
                           />
+                          <InstalledBuildsList builds={installedBuilds} onPlay={playBuild} onRemove={removeBuild} />
                         </div>
                       )}
                     </div>
@@ -1116,17 +1197,19 @@ export function Library() {
                         </div>
                       ) : exeUpdated ? (
                         <div className="flex flex-wrap gap-2">
-                          <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => { setAudioMuted(true); (window as any).Play(selectedGame.recompName, buildCvarArgs(), undefined, selectedGame.setGameDataRootToAssets === true); }}>
+                          <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => selectedBuild && playBuild(selectedBuild)}>
                             <Play className="w-4 h-4 mr-1" /> Play
                           </Button>
                           {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
                             <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
-                              <Download className="w-4 h-4 mr-1" /> Update
+                              <Download className="w-4 h-4 mr-1" /> {selectedBuild ? 'Update' : 'Install'}
                             </Button>
                           )}
-                          <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Uninstall(selectedGame.recompName); checkState(); }}>
-                            <Trash2 className="w-4 h-4 mr-1" /> Uninstall
-                          </Button>
+                          {selectedBuild && (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => removeBuild(selectedBuild)}>
+                              <Trash2 className="w-4 h-4 mr-1" /> Uninstall
+                            </Button>
+                          )}
                           {!selectedGame.disableSaveManager && (
                             <Button className="text-white px-4 py-2 text-sm" style={{ backgroundColor: 'var(--theme-accent)' }} onClick={() => navigate(`/${selectedGame.recompName}/saves`)}>
                               <Save className="w-4 h-4 mr-1" /> Saves
@@ -1143,11 +1226,13 @@ export function Library() {
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
-                            <Download className="w-4 h-4 mr-1" /> Update
+                            <Download className="w-4 h-4 mr-1" /> {selectedBuild ? 'Update' : 'Install'}
                           </Button>
-                          <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Uninstall(selectedGame.recompName); checkState(); }}>
-                            <Trash2 className="w-4 h-4 mr-1" /> Uninstall
-                          </Button>
+                          {selectedBuild && (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => removeBuild(selectedBuild)}>
+                              <Trash2 className="w-4 h-4 mr-1" /> Uninstall
+                            </Button>
+                          )}
                         </div>
                       )
                     ) : (
@@ -1168,12 +1253,13 @@ export function Library() {
                           setSelectedAsset={setSelectedAsset}
                           showNightlies={showNightlies}
                           setShowNightlies={setShowNightlies}
-                          installed={installedInfo}
+                          installed={selectedBuild}
                           loading={releasesLoading}
                           error={releasesError}
                           stale={releasesStale}
                           updatedAt={releasesUpdatedAt}
                         />
+                        <InstalledBuildsList builds={installedBuilds} onPlay={playBuild} onRemove={removeBuild} compact />
                       </div>
                     )}
                   </div>
