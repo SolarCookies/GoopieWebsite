@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -16,5 +16,9 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+// WebKitGTK (the Tauri launcher's Linux webview) stalls on Firestore's default
+// WebChannel streaming transport, leaving onSnapshot listeners (e.g. GameStore)
+// without data until the page is revisited. Auto-detecting long-polling keeps
+// streaming on Chromium/browsers and transparently falls back where it doesn't work.
+export const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 export const storage = getStorage(app);
