@@ -14,11 +14,20 @@ import {
   CarouselPrevious,
   CarouselNext,
 } from '../components/ui/carousel';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import { Game, Platform } from '../types/game';
 import { useAuth } from '../auth/AuthContext';
 import { useGameStore } from '../data/GameStore';
 import { useRatings } from '../data/useRatings';
 import { useFavorites } from '../data/useFavorites';
+import { usePlaytime } from '../data/usePlaytime';
 import { useCvarSettings } from '../data/useCvarSettings';
 import { StarRating } from '../components/StarRating';
 import { useTheme } from '../theme/ThemeContext';
@@ -125,6 +134,7 @@ export function Library() {
   const { games, saveGame, deleteGame, getVisibleGames } = useGameStore();
   const { gameRatings, userRatings, rateGame } = useRatings(user?.uid);
   const { isFavorite, toggleFavorite, favorites, reorderFavorites } = useFavorites(user?.uid);
+  const { recordSession } = usePlaytime(user?.uid);
   const { posts: newsPosts } = useNews();
   const { theme } = useTheme();
   const { setAccentColor } = useBackgroundAccent();
@@ -186,6 +196,12 @@ export function Library() {
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appliedUrlRef = useRef<string | undefined>(undefined);
+  // Currently-running game (per native `getRunningGame()`), polled so the
+  // Play button can flip to "Close" and so launching a different game can
+  // prompt to close the running one first.
+  const [runningGame, setRunningGame] = useState<{ game: string; build: string } | null>(null);
+  const runningGameRef = useRef<{ game: string; build: string; secondsPlayed: number } | null>(null);
+  const [pendingPlayBuild, setPendingPlayBuild] = useState<InstalledBuild | null>(null);
 
   const visibleGames = useMemo(() => {
     return getVisibleGames(user?.role, user?.assignedGames || []);
@@ -492,6 +508,36 @@ export function Library() {
     checkState();
   }, [checkState]);
 
+  // Poll the running game (drives the Play/Close button swap and the
+  // close-confirmation prompt). Whenever the tracked game/build changes —
+  // whether the process exited on its own or was closed to launch another —
+  // record the finished session's playtime against the game it belongs to.
+  useEffect(() => {
+    const w = window as any;
+    if (typeof w.getRunningGame !== 'function') return;
+    const poll = () => {
+      const running = w.getRunningGame();
+      const prev = runningGameRef.current;
+      const next = running
+        ? { game: String(running.game), build: String(running.build), secondsPlayed: Number(running.secondsPlayed) || 0 }
+        : null;
+
+      if (prev && (prev.game !== next?.game || prev.build !== next?.build)) {
+        const finishedGame = games.find(g => g.recompName === prev.game);
+        if (finishedGame) void recordSession(finishedGame.id, prev.secondsPlayed);
+      }
+
+      runningGameRef.current = next;
+      setRunningGame(prevState => {
+        if (prevState?.game === next?.game && prevState?.build === next?.build) return prevState;
+        return next ? { game: next.game, build: next.build } : null;
+      });
+    };
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => clearInterval(interval);
+  }, [games, recordSession]);
+
   // Launch a specific installed build directly (used by the "Installed builds"
   // list, independent of whichever build the version picker currently targets).
   const playBuild = useCallback((build: InstalledBuild) => {
@@ -501,6 +547,36 @@ export function Library() {
     setAudioMuted(true);
     w.Play(selectedGame.recompName, build.name, buildCvarArgs(), undefined, selectedGame.setGameDataRootToAssets === true);
   }, [selectedGame, buildCvarArgs]);
+
+  // Whether the currently-selected game is the one the launcher is tracking
+  // as running (drives the Play→Close button swap).
+  const isSelectedGameRunning = !!(selectedGame && runningGame && runningGame.game === selectedGame.recompName);
+
+  // Entry point for the Play button: if a *different* game is running, prompt
+  // before closing it (unsaved progress is lost); otherwise launch directly.
+  const requestPlay = useCallback((build: InstalledBuild) => {
+    if (!selectedGame) return;
+    if (runningGame && runningGame.game !== selectedGame.recompName) {
+      setPendingPlayBuild(build);
+      return;
+    }
+    playBuild(build);
+  }, [selectedGame, runningGame, playBuild]);
+
+  // Closes whatever game is currently running (used both by the "Close" button
+  // and, after confirmation, right before launching a different game).
+  const closeRunningGame = useCallback(() => {
+    const w = window as any;
+    if (typeof w.closeGame === 'function') w.closeGame();
+  }, []);
+
+  const confirmCloseAndPlay = useCallback(() => {
+    const build = pendingPlayBuild;
+    setPendingPlayBuild(null);
+    if (!build) return;
+    closeRunningGame();
+    playBuild(build);
+  }, [pendingPlayBuild, closeRunningGame, playBuild]);
 
   // Remove a single installed build's directory (leaves saves/assets and any
   // other installed builds of the same game untouched).
@@ -903,13 +979,23 @@ export function Library() {
                         ) : exeUpdated ? (
                           /* Selected build is installed and ready to play */
                           <div className="flex flex-wrap gap-3">
-                            <Button
-                              className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
-                              onClick={() => selectedBuild && playBuild(selectedBuild)}
-                            >
-                              <Play className="w-5 h-5 mr-2" />
-                              Play
-                            </Button>
+                            {isSelectedGameRunning ? (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
+                                onClick={closeRunningGame}
+                              >
+                                <X className="w-5 h-5 mr-2" />
+                                Close
+                              </Button>
+                            ) : (
+                              <Button
+                                className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
+                                onClick={() => selectedBuild && requestPlay(selectedBuild)}
+                              >
+                                <Play className="w-5 h-5 mr-2" />
+                                Play
+                              </Button>
+                            )}
                             {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
                               <Button
                                 className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
@@ -1220,9 +1306,15 @@ export function Library() {
                         </div>
                       ) : exeUpdated ? (
                         <div className="flex flex-wrap gap-2">
-                          <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => selectedBuild && playBuild(selectedBuild)}>
-                            <Play className="w-4 h-4 mr-1" /> Play
-                          </Button>
+                          {isSelectedGameRunning ? (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={closeRunningGame}>
+                              <X className="w-4 h-4 mr-1" /> Close
+                            </Button>
+                          ) : (
+                            <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => selectedBuild && requestPlay(selectedBuild)}>
+                              <Play className="w-4 h-4 mr-1" /> Play
+                            </Button>
+                          )}
                           {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
                             <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
                               <Download className="w-4 h-4 mr-1" /> {selectedBuild ? 'Update' : 'Install'}
@@ -1612,6 +1704,38 @@ export function Library() {
           onClose={() => { setShowEditor(false); setIsPreviewing(false); }}
         />
       )}
+
+      {/* Confirm closing the running game before launching a different one */}
+      <Dialog open={!!pendingPlayBuild} onOpenChange={(o) => { if (!o) setPendingPlayBuild(null); }}>
+        <DialogContent
+          className="sm:max-w-md"
+          style={{ backgroundColor: 'var(--theme-card-bg)', borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ color: 'var(--theme-text-primary)' }}>Close the running game?</DialogTitle>
+            <DialogDescription style={{ color: 'var(--theme-text-muted)' }}>
+              {runningGame ? `${runningGame.game} is currently running. ` : ''}
+              Launching this game will close it first, and any unsaved progress will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setPendingPlayBuild(null)}
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmCloseAndPlay}
+              className="gap-2 bg-[#8b1a1a] hover:bg-[#a52525] text-white border-0"
+            >
+              <X className="w-4 h-4" />
+              Close & Play
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
