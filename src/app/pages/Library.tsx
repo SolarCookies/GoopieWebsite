@@ -52,7 +52,9 @@ const statusDescriptions: Record<Game['status'], string> = {
  * Lists every locally-installed build of the selected game (each living in
  * its own `builds/<tag>/` directory), with per-build Play / Remove actions --
  * letting the user manage builds individually rather than only the one
- * currently targeted by the version picker. Hidden when nothing is installed.
+ * currently targeted by the version picker. Collapsed by default since most
+ * users only ever care about their current selection; hidden entirely when
+ * nothing is installed.
  */
 function InstalledBuildsList({
   builds,
@@ -65,13 +67,20 @@ function InstalledBuildsList({
   onRemove: (build: InstalledBuild) => void;
   compact?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   if (builds.length === 0) return null;
   return (
     <div className="mt-3 flex flex-col gap-2">
-      <span className={`font-semibold uppercase tracking-wide ${compact ? 'text-[10px]' : 'text-xs'}`} style={{ color: 'var(--theme-text-muted)' }}>
-        Installed builds
-      </span>
-      {builds.map(build => (
+      <button
+        type="button"
+        className={`flex items-center gap-1 font-semibold uppercase tracking-wide ${compact ? 'text-[10px]' : 'text-xs'}`}
+        style={{ color: 'var(--theme-text-muted)' }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <ChevronDown className={`transition-transform ${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${open ? '' : '-rotate-90'}`} />
+        Installed builds ({builds.length})
+      </button>
+      {open && builds.map(build => (
         <div
           key={build.name}
           className={`flex items-center justify-between gap-2 rounded-md ${compact ? 'px-2 py-1.5' : 'px-3 py-2'}`}
@@ -82,10 +91,24 @@ function InstalledBuildsList({
             {build.asset ? ` · ${build.asset}` : ''}
           </span>
           <div className="flex items-center gap-1 shrink-0">
-            <Button variant="ghost" size="icon" title="Play this build" onClick={() => onPlay(build)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover:opacity-80"
+              style={{ color: 'var(--theme-text-secondary)' }}
+              title="Play this build"
+              onClick={() => onPlay(build)}
+            >
               <Play className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
             </Button>
-            <Button variant="ghost" size="icon" title="Remove this build" onClick={() => onRemove(build)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover:opacity-80"
+              style={{ color: 'var(--theme-text-secondary)' }}
+              title="Remove this build"
+              onClick={() => onRemove(build)}
+            >
               <Trash2 className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
             </Button>
           </div>
