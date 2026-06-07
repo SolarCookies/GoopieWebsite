@@ -68,12 +68,17 @@ const statusDescriptions: Record<Game['status'], string> = {
 function InstalledBuildsList({
   builds,
   onPlay,
+  onClose,
   onRemove,
+  runningBuild,
   compact,
 }: {
   builds: InstalledBuild[];
   onPlay: (build: InstalledBuild) => void;
+  onClose: (build: InstalledBuild) => void;
   onRemove: (build: InstalledBuild) => void;
+  /** Name of the build currently running for this game, if any. */
+  runningBuild?: string | null;
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -89,7 +94,9 @@ function InstalledBuildsList({
         <ChevronDown className={`transition-transform ${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${open ? '' : '-rotate-90'}`} />
         Installed builds ({builds.length})
       </button>
-      {open && builds.map(build => (
+      {open && builds.map(build => {
+        const isRunning = !!runningBuild && build.name === runningBuild;
+        return (
         <div
           key={build.name}
           className={`flex items-center justify-between gap-2 rounded-md ${compact ? 'px-2 py-1.5' : 'px-3 py-2'}`}
@@ -100,29 +107,44 @@ function InstalledBuildsList({
             {build.asset ? ` · ${build.asset}` : ''}
           </span>
           <div className="flex items-center gap-1 shrink-0">
+            {isRunning ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:opacity-80"
+                style={{ color: '#a52525' }}
+                title="Close this build"
+                onClick={() => onClose(build)}
+              >
+                <X className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:opacity-80"
+                style={{ color: 'var(--theme-text-secondary)' }}
+                title="Play this build"
+                onClick={() => onPlay(build)}
+              >
+                <Play className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
-              className="hover:opacity-80"
+              className="hover:opacity-80 disabled:opacity-30 disabled:pointer-events-none"
               style={{ color: 'var(--theme-text-secondary)' }}
-              title="Play this build"
-              onClick={() => onPlay(build)}
-            >
-              <Play className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hover:opacity-80"
-              style={{ color: 'var(--theme-text-secondary)' }}
-              title="Remove this build"
+              title={isRunning ? 'Close the build before removing it' : 'Remove this build'}
+              disabled={isRunning}
               onClick={() => onRemove(build)}
             >
               <Trash2 className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
             </Button>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -548,15 +570,23 @@ export function Library() {
     w.Play(selectedGame.recompName, build.name, buildCvarArgs(), undefined, selectedGame.setGameDataRootToAssets === true);
   }, [selectedGame, buildCvarArgs]);
 
-  // Whether the currently-selected game is the one the launcher is tracking
-  // as running (drives the Play→Close button swap).
-  const isSelectedGameRunning = !!(selectedGame && runningGame && runningGame.game === selectedGame.recompName);
+  // Name of the running build, if it belongs to the selected game (used to
+  // mark the matching row in the installed-builds list as "running").
+  const runningBuildForSelectedGame = (selectedGame && runningGame && runningGame.game === selectedGame.recompName)
+    ? runningGame.build
+    : null;
 
-  // Entry point for the Play button: if a *different* game is running, prompt
-  // before closing it (unsaved progress is lost); otherwise launch directly.
+  // Whether the build the big Play/Close button currently targets is the one
+  // actually running (vs. a different build of the same game, or another game
+  // entirely — both of which still show "Play" but prompt to close first).
+  const isSelectedBuildRunning = !!(selectedBuild && runningBuildForSelectedGame === selectedBuild.name);
+
+  // Entry point for any Play action: if a *different* game — or a different
+  // build of this game — is running, prompt before closing it (unsaved
+  // progress is lost); otherwise launch directly.
   const requestPlay = useCallback((build: InstalledBuild) => {
     if (!selectedGame) return;
-    if (runningGame && runningGame.game !== selectedGame.recompName) {
+    if (runningGame && (runningGame.game !== selectedGame.recompName || runningGame.build !== build.name)) {
       setPendingPlayBuild(build);
       return;
     }
@@ -979,7 +1009,7 @@ export function Library() {
                         ) : exeUpdated ? (
                           /* Selected build is installed and ready to play */
                           <div className="flex flex-wrap gap-3">
-                            {isSelectedGameRunning ? (
+                            {isSelectedBuildRunning ? (
                               <Button
                                 className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
                                 onClick={closeRunningGame}
@@ -1092,7 +1122,7 @@ export function Library() {
                             stale={releasesStale}
                             updatedAt={releasesUpdatedAt}
                           />
-                          <InstalledBuildsList builds={installedBuilds} onPlay={playBuild} onRemove={removeBuild} />
+                          <InstalledBuildsList builds={installedBuilds} onPlay={requestPlay} onClose={closeRunningGame} onRemove={removeBuild} runningBuild={runningBuildForSelectedGame} />
                         </div>
                       )}
                     </div>
@@ -1306,7 +1336,7 @@ export function Library() {
                         </div>
                       ) : exeUpdated ? (
                         <div className="flex flex-wrap gap-2">
-                          {isSelectedGameRunning ? (
+                          {isSelectedBuildRunning ? (
                             <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={closeRunningGame}>
                               <X className="w-4 h-4 mr-1" /> Close
                             </Button>
@@ -1374,7 +1404,7 @@ export function Library() {
                           stale={releasesStale}
                           updatedAt={releasesUpdatedAt}
                         />
-                        <InstalledBuildsList builds={installedBuilds} onPlay={playBuild} onRemove={removeBuild} compact />
+                        <InstalledBuildsList builds={installedBuilds} onPlay={requestPlay} onClose={closeRunningGame} onRemove={removeBuild} runningBuild={runningBuildForSelectedGame} compact />
                       </div>
                     )}
                   </div>
