@@ -21,6 +21,16 @@ export interface InstalledInfo {
   exePath?: string;
 }
 
+/**
+ * A single installed build, as reported by the launcher's `getInstalledBuilds`.
+ * `name` is the on-disk build key (the sanitised release tag) — pass it back
+ * to `Play`/`Uninstall`/`isExeUpdated`/`getInstalledVersion`/`NeedsUpdate` to
+ * target this specific build.
+ */
+export interface InstalledBuild extends InstalledInfo {
+  name: string;
+}
+
 const NIGHTLY_KEY = 'goopie:showNightlies';
 const SELECTION_KEY = (gameId: string) => `goopie:gameVersion:${gameId}`;
 const RELEASES_STORAGE_KEY = (repo: string) => `goopie:releases:${repo}`;
@@ -454,4 +464,39 @@ export function readInstalledInfo(recompName: string): InstalledInfo | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * List every build of a game that is currently installed on disk (each living
+ * in its own `builds/<tag>/` directory — see `getInstalledBuilds` in the
+ * launcher's `games.rs`). Returns `[]` when not running inside the launcher,
+ * when the bridge doesn't expose the call yet (older launcher), or on error.
+ */
+export function readInstalledBuilds(recompName: string): InstalledBuild[] {
+  if (typeof window === 'undefined') return [];
+  const w = window as any;
+  if (typeof w.getInstalledBuilds !== 'function') return [];
+  try {
+    const raw = w.getInstalledBuilds(recompName);
+    if (!raw) return [];
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? (parsed as InstalledBuild[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Find the installed build matching a given version tag / asset selection
+ * (the same predicate used to decide whether the user's current
+ * version-picker selection is already installed). A `null`/`undefined`
+ * `tag`/`asset` matches any build, so this also doubles as "pick any
+ * installed build" when the caller has no explicit selection yet.
+ */
+export function findInstalledBuild(
+  builds: InstalledBuild[],
+  tag: string | null | undefined,
+  asset: string | null | undefined,
+): InstalledBuild | null {
+  return builds.find(b => (!tag || b.version === tag) && (!asset || b.asset === asset)) ?? null;
 }
