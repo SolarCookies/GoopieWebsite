@@ -15,6 +15,7 @@ import { isInTauriLauncher } from '../utils/externalLink';
  */
 function OfflineModeToggle() {
   const [offline, setOffline] = useState<boolean | null>(null);
+  const [reachable, setReachable] = useState(true);
 
   useEffect(() => {
     const w = window as any;
@@ -23,9 +24,25 @@ function OfflineModeToggle() {
     }
   }, []);
 
+  // goopie.xyz reachability is cached natively (a real probe can take seconds
+  // to time out, and the bridge is synchronous) — poll the cheap cached flag
+  // so "switch to online mode" can be greyed out while it'd just land on a
+  // broken page.
+  useEffect(() => {
+    const w = window as any;
+    if (typeof w.isGoopieReachable !== 'function') return;
+    const poll = () => setReachable(Boolean(w.isGoopieReachable()));
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   if (offline === null) return null;
 
+  const disabled = offline && !reachable;
+
   const handleClick = () => {
+    if (disabled) return;
     const w = window as any;
     if (typeof w.setOfflineMode === 'function') {
       w.setOfflineMode(!offline);
@@ -33,16 +50,19 @@ function OfflineModeToggle() {
     }
   };
 
+  const title = disabled
+    ? "goopie.xyz isn't reachable right now — can't switch to online mode"
+    : offline
+      ? 'Enable online mode to download more games and log your progress'
+      : 'Switch to offline mode';
+
   return (
     <button
       onClick={handleClick}
-      className="flex items-center justify-center w-10 h-10 rounded-lg transition-colors"
+      disabled={disabled}
+      className="flex items-center justify-center w-10 h-10 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       style={{ backgroundColor: 'var(--theme-item-selected)', color: 'var(--theme-text-primary)' }}
-      title={
-        offline
-          ? 'Enable online mode to download more games and log your progress'
-          : 'Switch to offline mode'
-      }
+      title={title}
     >
       {offline ? <WifiOff className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
     </button>
