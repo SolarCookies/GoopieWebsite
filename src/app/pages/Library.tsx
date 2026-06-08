@@ -3,7 +3,7 @@ import { GameList } from '../components/GameList';
 import { TopBar } from '../components/TopBar';
 import { Sidebar, SIDEBAR_WIDTH_CLASS } from '../components/Sidebar';
 import { GameEditor } from '../components/GameEditor';
-import { Play, FolderOpen, Trash2, Download, RefreshCw, Globe, ExternalLink, AlertTriangle, Loader2, Pencil, EyeOff, Eye, Info, Save, X, Bug, ArrowLeft, Star, ChevronDown, Newspaper, Car } from 'lucide-react';
+import { Play, FolderOpen, Trash2, Download, RefreshCw, Globe, ExternalLink, AlertTriangle, Pencil, EyeOff, Eye, Info, Save, X, Bug, ArrowLeft, Star, ChevronDown, Newspaper, Car } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
@@ -200,10 +200,6 @@ export function Library() {
   const [chosenAudioUrl, setChosenAudioUrl] = useState<string | undefined>(undefined);
   const [isoInstalled, setIsoInstalled] = useState(false);
   const [isInCEF, setIsInCEF] = useState(false);
-  const [launcherOutdated, setLauncherOutdated] = useState(false);
-  const [latestLauncherVersion, setLatestLauncherVersion] = useState<string | null>(null);
-  const [canSelfUpdate, setCanSelfUpdate] = useState(false);
-  const [updatingLauncher, setUpdatingLauncher] = useState(false);
   const [exeUpdated, setExeUpdated] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -657,20 +653,13 @@ export function Library() {
     checkState();
   }, [selectedGame, checkState]);
 
-  // Check launcher version on mount
+  // Check launcher version on mount. (Launcher self-update state itself now
+  // lives in LauncherUpdateContext / the TopBar update icon — see App.tsx.)
   useEffect(() => {
     const w = window as any;
     if (w.getVersion) {
       const version = w.getVersion();
       setIsInCEF(typeof version === 'string');
-      setCanSelfUpdate(!!w.SelfUpdateLauncher);
-      if (w.CheckForLauncherUpdate) {
-        const info = w.CheckForLauncherUpdate();
-        if (info?.hasUpdate) {
-          setLauncherOutdated(true);
-          setLatestLauncherVersion(info.latestVersion ?? null);
-        }
-      }
     }
   }, []);
 
@@ -685,13 +674,9 @@ export function Library() {
 
   // Poll progress while updating or extracting
   useEffect(() => {
-    if (updating || extracting || updatingLauncher) {
+    if (updating || extracting) {
       pollRef.current = setInterval(() => {
         const w = window as any;
-        if (updatingLauncher) {
-          setDownloadProgress(w.getDownloadProgress ? w.getDownloadProgress() : 0);
-          setDownloadString(w.getDownloadString ? w.getDownloadString() : '');
-        }
         if (selectedGame) {
           // Update check
           const isUp = w.isUpdating ? w.isUpdating(selectedGame.id) : false;
@@ -720,7 +705,7 @@ export function Library() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [updating, extracting, updatingLauncher, selectedGame, selectedTag, selectedAsset]);
+  }, [updating, extracting, selectedGame, selectedTag, selectedAsset]);
 
   // Steady-state install-state refresh (1.5 s) while inside the launcher and
   // not already in a fast-poll cycle.  This ensures that completing an ISO
@@ -804,43 +789,8 @@ export function Library() {
   return (
     <div className={`flex h-screen flex-col relative ${SIDEBAR_WIDTH_CLASS}`} style={{ backgroundColor: 'var(--theme-page-bg)' }}>
       <Sidebar />
-      {launcherOutdated && (
-        <div className="bg-[#b8860b] px-4 md:px-6 py-2 md:py-3 flex items-center justify-center gap-2 md:gap-3 relative z-10">
-          {updatingLauncher ? (
-            <>
-              <Loader2 className="w-4 h-4 text-white shrink-0 animate-spin" />
-              <span className="text-white font-semibold text-xs md:text-sm">
-                Updating launcher… {downloadProgress > 0 ? `${downloadProgress}%` : ''}{downloadString ? ` (${downloadString})` : ''}
-              </span>
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="w-5 h-5 text-white shrink-0" />
-              <span className="text-white font-semibold text-xs md:text-sm">
-                Your launcher is outdated{latestLauncherVersion ? ` (${latestLauncherVersion} available)` : ''}.
-              </span>
-              {canSelfUpdate ? (
-                <button
-                  className="text-white underline font-bold text-xs md:text-sm hover:text-yellow-200 transition-colors"
-                  onClick={() => {
-                    (window as any).SelfUpdateLauncher();
-                    setUpdatingLauncher(true);
-                  }}
-                >
-                  Update now
-                </button>
-              ) : (
-                <a
-                  className="text-white underline font-bold text-xs md:text-sm hover:text-yellow-200 transition-colors cursor-pointer"
-                  onClick={() => openExternal('https://goopie.xyz/')}
-                >
-                  Download at goopie.xyz
-                </a>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      {/* Launcher self-update prompt now lives in the TopBar's "update available"
+          icon + LauncherUpdateDialog (see LauncherUpdateContext / App.tsx). */}
       {isLegacyLauncher && !legacyBannerDismissed && (
         <div className="bg-yellow-400 px-4 md:px-6 py-2 flex items-center justify-center gap-2 md:gap-3 relative z-10 text-center pr-8">
           <AlertTriangle className="w-4 h-4 text-yellow-950 shrink-0" />
