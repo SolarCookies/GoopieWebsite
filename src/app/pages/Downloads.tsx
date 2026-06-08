@@ -13,7 +13,8 @@ interface LauncherAssets {
   tag: string;
   windowsMsi?: ReleaseAsset;
   windowsExe?: ReleaseAsset;
-  linuxDeb?: ReleaseAsset;
+  // .deb is no longer published (the launcher can only self-update a single
+  // portable executable/AppImage — see GoopieLauncher's release workflow).
   linuxAppImage?: ReleaseAsset;
 }
 
@@ -70,7 +71,6 @@ export function Downloads() {
           tag: latest.tag,
           windowsMsi:     find(n => n.endsWith('.msi')),
           windowsExe:     find(n => n.endsWith('.exe')),
-          linuxDeb:       find(n => n.endsWith('.deb')),
           linuxAppImage:  find(n => n.endsWith('.appimage')),
         });
       })
@@ -145,7 +145,6 @@ export function Downloads() {
                 Linux x86_64
               </h2>
               <div className="flex flex-wrap gap-3">
-                <DownloadButton asset={launcherAssets?.linuxDeb} label="Debian (.deb)" loading={loading} />
                 <DownloadButton asset={launcherAssets?.linuxAppImage} label="AppImage" loading={loading} />
               </div>
             </div>
