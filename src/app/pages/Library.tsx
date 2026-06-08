@@ -640,6 +640,16 @@ export function Library() {
     checkState();
   }, [selectedGame, selectedBuild, setSelectedTag, setSelectedAsset, checkState]);
 
+  // Lets the user reclaim the disk space an extracted ISO takes up once no
+  // build is installed at all (the case where "Uninstall" no longer applies).
+  const removeAssets = useCallback(() => {
+    if (!selectedGame) return;
+    const w = window as any;
+    if (typeof w.RemoveAssets !== 'function') return;
+    w.RemoveAssets(selectedGame.recompName);
+    checkState();
+  }, [selectedGame, checkState]);
+
   // Check launcher version on mount
   useEffect(() => {
     const w = window as any;
@@ -1137,13 +1147,21 @@ export function Library() {
                               <Download className="w-5 h-5 mr-2" />
                               {selectedBuild ? 'Update' : 'Install'}
                             </Button>
-                            {selectedBuild && (
+                            {selectedBuild ? (
                               <Button
                                 className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
                                 onClick={() => removeBuild(selectedBuild)}
                               >
                                 <Trash2 className="w-5 h-5 mr-2" />
                                 Uninstall
+                              </Button>
+                            ) : installedBuilds.length === 0 && isoInstalled && (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
+                                onClick={removeAssets}
+                              >
+                                <Trash2 className="w-5 h-5 mr-2" />
+                                Remove assets
                               </Button>
                             )}
                           </div>
@@ -1436,9 +1454,13 @@ export function Library() {
                           <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
                             <Download className="w-4 h-4 mr-1" /> {selectedBuild ? 'Update' : 'Install'}
                           </Button>
-                          {selectedBuild && (
+                          {selectedBuild ? (
                             <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => removeBuild(selectedBuild)}>
                               <Trash2 className="w-4 h-4 mr-1" /> Uninstall
+                            </Button>
+                          ) : installedBuilds.length === 0 && isoInstalled && (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={removeAssets}>
+                              <Trash2 className="w-4 h-4 mr-1" /> Remove assets
                             </Button>
                           )}
                         </div>
