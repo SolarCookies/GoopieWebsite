@@ -628,8 +628,17 @@ export function Library() {
     const w = window as any;
     if (typeof w.Uninstall !== 'function') return;
     w.Uninstall(selectedGame.recompName, build.name);
+    // Uninstalling the build the user is currently looking at would otherwise
+    // leave the picker pointing at a now-missing version ("Not installed"),
+    // even though another installed build is right there. Retarget to it.
+    if (selectedBuild?.name === build.name) {
+      const remaining = readInstalledBuilds(selectedGame.recompName);
+      const next = remaining[0] ?? null;
+      setSelectedTag(next?.version);
+      setSelectedAsset(next?.asset);
+    }
     checkState();
-  }, [selectedGame, checkState]);
+  }, [selectedGame, selectedBuild, setSelectedTag, setSelectedAsset, checkState]);
 
   // Check launcher version on mount
   useEffect(() => {
