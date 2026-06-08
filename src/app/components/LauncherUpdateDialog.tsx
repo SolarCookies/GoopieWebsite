@@ -35,7 +35,10 @@ export function LauncherUpdateDialog({ open, onOpenChange }: LauncherUpdateDialo
     // button all funnel through onOpenChange) — the dialog stays put until the
     // download finishes and the launcher restarts itself.
     <Dialog open={open} onOpenChange={(next) => { if (!updating) onOpenChange(next); }}>
-      <DialogContent style={{ backgroundColor: 'var(--theme-card-bg)', borderColor: 'var(--theme-border)' }}>
+      <DialogContent
+        showCloseButton={false}
+        style={{ backgroundColor: 'var(--theme-card-bg)', borderColor: 'var(--theme-border)' }}
+      >
         {updating ? (
           <>
             <DialogHeader>
