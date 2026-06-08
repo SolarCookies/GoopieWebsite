@@ -205,7 +205,6 @@ export function Library() {
   const [canSelfUpdate, setCanSelfUpdate] = useState(false);
   const [updatingLauncher, setUpdatingLauncher] = useState(false);
   const [exeUpdated, setExeUpdated] = useState(false);
-  const [needsUpdate, setNeedsUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadString, setDownloadString] = useState('');
@@ -363,14 +362,6 @@ export function Library() {
     return buildReleaseDownloadPrefix(githubRepo, selectedTag);
   }, [githubRepo, selectedTag, selectedGame?.githubReleaseUrl]);
 
-  // Build the per-release API URL used by the launcher's NeedsUpdate().
-  const releaseApiUrl = useMemo(() => {
-    if (githubRepo && selectedTag) {
-      return `https://api.github.com/repos/${githubRepo}/releases/tags/${encodeURIComponent(selectedTag)}`;
-    }
-    return selectedGame?.githubApiUrl ?? '';
-  }, [githubRepo, selectedTag, selectedGame?.githubApiUrl]);
-
   // With per-build directories, picking a tag/asset that isn't installed no
   // longer means "needs an update" -- it means "install this as a new,
   // separate build". `selectionMismatch` now flags exactly that: the user has
@@ -515,7 +506,6 @@ export function Library() {
       setInstalledBuilds(builds);
       const matching = findInstalledBuild(builds, selectedTag, selectedAsset);
       setExeUpdated(matching && w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName, matching.name) : false);
-      setNeedsUpdate(matching && w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, matching.name, releaseApiUrl, selectedAsset ?? '') : false);
       const isUp = w.isUpdating ? w.isUpdating(selectedGame.id) : false;
       setUpdating(isUp);
       if (isUp) {
@@ -529,7 +519,7 @@ export function Library() {
         setExtractString(w.getExtractString ? w.getExtractString(selectedGame.id) : 'Extracting...');
       }
     }
-  }, [selectedGame, releaseApiUrl, selectedTag, selectedAsset]);
+  }, [selectedGame, selectedTag, selectedAsset]);
 
   useEffect(() => {
     checkState();
@@ -670,7 +660,6 @@ export function Library() {
             setInstalledBuilds(builds);
             const matching = findInstalledBuild(builds, selectedTag, selectedAsset);
             setExeUpdated(matching && w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName, matching.name) : false);
-            setNeedsUpdate(matching && w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, matching.name, releaseApiUrl, selectedAsset ?? '') : false);
           }
           // Extract check
           const isExt = w.isExtracting ? w.isExtracting(selectedGame.id) : false;
@@ -1058,7 +1047,7 @@ export function Library() {
                                 Play
                               </Button>
                             )}
-                            {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
+                            {(selectionMismatch || newerReleaseAvailable) && (
                               <Button
                                 className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
                                 onClick={triggerUpdate}
@@ -1377,7 +1366,7 @@ export function Library() {
                               <Play className="w-4 h-4 mr-1" /> Play
                             </Button>
                           )}
-                          {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
+                          {(selectionMismatch || newerReleaseAvailable) && (
                             <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
                               <Download className="w-4 h-4 mr-1" /> {selectedBuild ? 'Update' : 'Install'}
                             </Button>
