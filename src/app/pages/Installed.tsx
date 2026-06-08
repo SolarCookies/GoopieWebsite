@@ -49,6 +49,7 @@ export function InstalledFilterPage({ mode, title, subtitle, emptyMessage }: Ins
       Stable: 1,
       Playable: 2,
       Ingame: 3,
+      External: 4,
     };
 
     return visibleGames

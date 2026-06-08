@@ -192,7 +192,7 @@ export function useNews() {
     (post: NewsPost) => {
       if (!user) return false;
       if (user.role === 'admin') return true;
-      return user.uid === post.authorUid && (user.role === 'developer' || user.role === 'admin');
+      return user.uid === post.authorUid && user.role === 'developer';
     },
     [user],
   );
