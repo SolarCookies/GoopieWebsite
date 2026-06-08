@@ -921,6 +921,7 @@ export function Library() {
                   Browser/CEF: 1 s opacity cross-fade.  Tauri: instant (no transition). */}
               <div className="relative h-[200px] md:h-[500px] overflow-hidden z-10 ">
                 {([{ id: 'A', slot: slotA }, { id: 'B', slot: slotB }] as const).map(({ id, slot }) => (
+                  slot.src ? (
                   <img
                     key={id}
                     src={slot.src}
@@ -931,6 +932,7 @@ export function Library() {
                       transition: isTauri ? undefined : 'opacity 1s ease-in-out',
                     }}
                   />
+                  ) : null
                 ))}
                 <div className="absolute inset-0" style={{ backgroundColor: 'var(--theme-header-color)', mixBlendMode: 'multiply' }} />
                 <div className="absolute inset-0" style={{ backgroundColor: 'var(--theme-header-overlay)' }} />
