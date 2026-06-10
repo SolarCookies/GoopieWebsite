@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useTheme, type ThemeName } from '../theme/ThemeContext';
 import { getFpsEnabled, setFpsEnabled } from '../components/FpsCounter';
 import { isInTauriLauncher } from '../utils/externalLink';
+import { getLauncherVersion } from '../utils/launcherVersion';
 
 const languageOptions: { id: number; label: string }[] = [
   { id: 1, label: 'English' },
@@ -45,6 +46,7 @@ export function Settings() {
   const [showFps, setShowFps] = useState<boolean>(() => getFpsEnabled());
   const [offline, setOffline] = useState<boolean | null>(null);
   const [reachable, setReachable] = useState(true);
+  const launcherVersion = getLauncherVersion();
   const w = window as any;
 
   useEffect(() => {
@@ -377,6 +379,28 @@ export function Settings() {
               />
             </button>
           </div>
+
+          {launcherVersion !== null && (
+            <div
+              className="rounded-xl border-2 p-5 flex items-center justify-between gap-4 mt-4"
+              style={{
+                borderColor: 'var(--theme-border)',
+                backgroundColor: 'var(--theme-card-bg)',
+                backdropFilter: 'var(--theme-backdrop-blur)',
+                WebkitBackdropFilter: 'var(--theme-backdrop-blur)',
+              }}
+            >
+              <div className="min-w-0">
+                <div className="font-semibold" style={{ color: 'var(--theme-text-primary)' }}>Launcher Version</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--theme-text-muted)' }}>
+                  Version of the GoopieLauncher app, for debugging.
+                </div>
+              </div>
+              <div className="shrink-0 font-mono text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+                {launcherVersion}
+              </div>
+            </div>
+          )}
         </section>
 
       </div>
