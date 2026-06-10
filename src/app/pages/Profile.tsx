@@ -14,6 +14,7 @@ const statusColors: Record<Game['status'], string> = {
   Stable: 'bg-green-500 text-white',
   Playable: 'bg-white text-black',
   Enhanced: 'bg-blue-500 text-white',
+  External: 'bg-orange-500 text-white',
 };
 
 export function Profile() {

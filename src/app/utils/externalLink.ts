@@ -24,6 +24,37 @@ export function isInTauriLauncher(): boolean {
 }
 
 /**
+ * Memoized result of the last `window.isOfflineMode()` bridge call (see below).
+ * `undefined` until first computed.
+ */
+let cachedOfflineMode: boolean | undefined;
+
+/**
+ * Returns true when the user has explicitly enabled offline mode in the
+ * Tauri launcher (see `window.isOfflineMode` / GoopieLauncher's persisted
+ * preference). Firestore-backed hooks should treat this as "don't even try
+ * to subscribe" — not just "the network is currently down" — so the app
+ * stops generating `firestore.googleapis.com` connection-error spam and the
+ * disk-cache-seeded state isn't raced/overwritten by a live listener.
+ *
+ * `window.isOfflineMode` is a *synchronous* bridge call (blocking XHR — see
+ * GoopieLauncher's `bridge/shim.js`), so we memoize the result for the life
+ * of the page: the only way the effective mode changes is `setOfflineMode`,
+ * which immediately navigates/reloads the window, so a stale cached value
+ * can't outlive the mode it describes. Without this memo, callers that check
+ * `isOfflineMode()` from a render path (e.g. `Sidebar`, which re-renders every
+ * 1.5s and on every navigation) would each fire a blocking round-trip to Rust,
+ * stalling the UI thread during scroll/navigation.
+ */
+export function isOfflineMode(): boolean {
+  if (cachedOfflineMode !== undefined) return cachedOfflineMode;
+  const w = window as any;
+  cachedOfflineMode =
+    isInTauriLauncher() && typeof w.isOfflineMode === 'function' && Boolean(w.isOfflineMode());
+  return cachedOfflineMode;
+}
+
+/**
  * Open `url` in the system browser when inside a launcher, otherwise open a
  * new tab.  Safe to call from any component without a React hook.
  */

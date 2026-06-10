@@ -1,6 +1,10 @@
-import { Search, Settings, Volume2, VolumeX } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Settings, DownloadCloud, Volume2, VolumeX } from 'lucide-react';
 import { Link } from 'react-router';
 import { Input } from './ui/input';
+import { isInTauriLauncher } from '../utils/externalLink';
+import { useLauncherUpdate } from '../data/LauncherUpdateContext';
+import { LauncherUpdateDialog } from './LauncherUpdateDialog';
 
 interface TopBarProps {
   searchQuery: string;
@@ -11,6 +15,9 @@ interface TopBarProps {
 }
 
 export function TopBar({ searchQuery, onSearchChange, audioMuted, onToggleMute, isInCEF }: TopBarProps) {
+  const { updateAvailable, latestVersion } = useLauncherUpdate();
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+
   return (
     <div
       className="sticky top-0 z-30 h-14 md:h-16 border-b flex items-center gap-2 md:gap-4 px-3 md:px-6"
@@ -55,7 +62,23 @@ export function TopBar({ searchQuery, onSearchChange, audioMuted, onToggleMute, 
           </button>
         )}
 
-        {isInCEF && (
+        {updateAvailable && (
+          <button
+            onClick={() => setUpdateDialogOpen(true)}
+            className="relative flex items-center justify-center w-10 h-10 rounded-lg transition-colors"
+            style={{ backgroundColor: 'var(--theme-item-selected)', color: 'var(--theme-text-primary)' }}
+            title={latestVersion ? `Launcher update available (${latestVersion})` : 'Launcher update available'}
+          >
+            <DownloadCloud className="w-5 h-5" />
+            <span
+              className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
+              style={{ backgroundColor: 'var(--theme-accent)' }}
+              aria-hidden="true"
+            />
+          </button>
+        )}
+
+        {(isInCEF || isInTauriLauncher()) && (
           <Link
             to="/settings"
             className="flex items-center justify-center w-10 h-10 rounded-lg transition-colors"
@@ -66,6 +89,8 @@ export function TopBar({ searchQuery, onSearchChange, audioMuted, onToggleMute, 
           </Link>
         )}
       </div>
+
+      <LauncherUpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../auth/AuthContext';
+import { isOfflineMode } from '../utils/externalLink';
 
 export interface NewsPost {
   id: string;
@@ -132,6 +133,13 @@ export function useNews() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    // No disk cache for news — explicit offline mode just means "no posts",
+    // and skipping the subscription avoids spamming the console with
+    // `firestore.googleapis.com` connection-error retries.
+    if (isOfflineMode()) {
+      setLoaded(true);
+      return;
+    }
     const q = query(collection(db, 'news'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(
       q,
@@ -184,7 +192,7 @@ export function useNews() {
     (post: NewsPost) => {
       if (!user) return false;
       if (user.role === 'admin') return true;
-      return user.uid === post.authorUid && (user.role === 'developer' || user.role === 'admin');
+      return user.uid === post.authorUid && user.role === 'developer';
     },
     [user],
   );

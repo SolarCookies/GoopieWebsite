@@ -40,6 +40,7 @@ export function Home() {
       Stable: 1,
       Playable: 2,
       Ingame: 3,
+      External: 4,
     };
     let totalSum = 0;
     let totalCount = 0;

@@ -14,11 +14,20 @@ import {
   CarouselPrevious,
   CarouselNext,
 } from '../components/ui/carousel';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import { Game, Platform } from '../types/game';
 import { useAuth } from '../auth/AuthContext';
 import { useGameStore } from '../data/GameStore';
 import { useRatings } from '../data/useRatings';
 import { useFavorites } from '../data/useFavorites';
+import { usePlaytime } from '../data/usePlaytime';
 import { useCvarSettings } from '../data/useCvarSettings';
 import { StarRating } from '../components/StarRating';
 import { useTheme } from '../theme/ThemeContext';
@@ -28,7 +37,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 import { BackgroundAudioPlayer } from '../components/BackgroundAudioPlayer';
 import { Markdown } from '../components/Markdown';
 import { useNews } from '../data/useNews';
-import { buildReleaseDownloadPrefix, pickDefaultAsset, sortAssetsByRelevance, readInstalledInfo, useGameReleases, type InstalledInfo } from '../data/useGameReleases';
+import { buildReleaseDownloadPrefix, pickDefaultAsset, sortAssetsByRelevance, readInstalledBuilds, findInstalledBuild, useGameReleases, type InstalledBuild } from '../data/useGameReleases';
 import { GameVersionPicker } from '../components/GameVersionPicker';
 import { isInLauncher, isInTauriLauncher, openExternal as openExternalUrl } from '../utils/externalLink';
 
@@ -48,7 +57,97 @@ const statusDescriptions: Record<Game['status'], string> = {
   External: 'Uses an external launcher download',
 };
 
-const EXPECTED_LAUNCHER_VERSION = 10;
+/**
+ * Lists every locally-installed build of the selected game (each living in
+ * its own `builds/<tag>/` directory), with per-build Play / Remove actions --
+ * letting the user manage builds individually rather than only the one
+ * currently targeted by the version picker. Collapsed by default since most
+ * users only ever care about their current selection; hidden entirely when
+ * nothing is installed.
+ */
+function InstalledBuildsList({
+  builds,
+  onPlay,
+  onClose,
+  onRemove,
+  runningBuild,
+  compact,
+}: {
+  builds: InstalledBuild[];
+  onPlay: (build: InstalledBuild) => void;
+  onClose: (build: InstalledBuild) => void;
+  onRemove: (build: InstalledBuild) => void;
+  /** Name of the build currently running for this game, if any. */
+  runningBuild?: string | null;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  if (builds.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <button
+        type="button"
+        className={`flex items-center gap-1 font-semibold uppercase tracking-wide ${compact ? 'text-[10px]' : 'text-xs'}`}
+        style={{ color: 'var(--theme-text-muted)' }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <ChevronDown className={`transition-transform ${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${open ? '' : '-rotate-90'}`} />
+        Installed builds ({builds.length})
+      </button>
+      {open && builds.map(build => {
+        const isRunning = !!runningBuild && build.name === runningBuild;
+        return (
+        <div
+          key={build.name}
+          className={`flex items-center justify-between gap-2 rounded-md ${compact ? 'px-2 py-1.5' : 'px-3 py-2'}`}
+          style={{ backgroundColor: 'var(--theme-page-bg)' }}
+        >
+          <span className={`truncate ${compact ? 'text-xs' : 'text-sm'}`} style={{ color: 'var(--theme-text-primary)' }}>
+            {build.version || build.name}
+            {build.asset ? ` · ${build.asset}` : ''}
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {isRunning ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:opacity-80"
+                style={{ color: '#a52525' }}
+                title="Close this build"
+                onClick={() => onClose(build)}
+              >
+                <X className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:opacity-80"
+                style={{ color: 'var(--theme-text-secondary)' }}
+                title="Play this build"
+                onClick={() => onPlay(build)}
+              >
+                <Play className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover:opacity-80 disabled:opacity-30 disabled:pointer-events-none"
+              style={{ color: 'var(--theme-text-secondary)' }}
+              title={isRunning ? 'Close the build before removing it' : 'Remove this build'}
+              disabled={isRunning}
+              onClick={() => onRemove(build)}
+            >
+              <Trash2 className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+            </Button>
+          </div>
+        </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function Library() {
   const { recompName: urlRecompName } = useParams<{ recompName: string }>();
@@ -57,6 +156,7 @@ export function Library() {
   const { games, saveGame, deleteGame, getVisibleGames } = useGameStore();
   const { gameRatings, userRatings, rateGame } = useRatings(user?.uid);
   const { isFavorite, toggleFavorite, favorites, reorderFavorites } = useFavorites(user?.uid);
+  const { recordSession } = usePlaytime(user?.uid);
   const { posts: newsPosts } = useNews();
   const { theme } = useTheme();
   const { setAccentColor } = useBackgroundAccent();
@@ -90,6 +190,8 @@ export function Library() {
   // activeSlot.  In browser/CEF the swap uses an opacity cross-fade; in the
   // Tauri/WebKit launcher transitions are disabled (instant swap).
   const isTauri = isInTauriLauncher();
+  // Legacy CEF launcher: in a launcher, but not the new Tauri one.
+  const isLegacyLauncher = isInLauncher() && !isTauri;
   const [slotA, setSlotA] = useState({ src: '' });
   const [slotB, setSlotB] = useState({ src: '' });
   const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A');
@@ -98,9 +200,7 @@ export function Library() {
   const [chosenAudioUrl, setChosenAudioUrl] = useState<string | undefined>(undefined);
   const [isoInstalled, setIsoInstalled] = useState(false);
   const [isInCEF, setIsInCEF] = useState(false);
-  const [launcherOutdated, setLauncherOutdated] = useState(false);
   const [exeUpdated, setExeUpdated] = useState(false);
-  const [needsUpdate, setNeedsUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadString, setDownloadString] = useState('');
@@ -110,11 +210,20 @@ export function Library() {
   const [infoBannerDismissed, setInfoBannerDismissed] = useState(() => {
     try { return localStorage.getItem('goopie:infoBannerDismissed') === '1'; } catch { return false; }
   });
+  const [legacyBannerDismissed, setLegacyBannerDismissed] = useState(() => {
+    try { return localStorage.getItem('goopie:legacyLauncherBannerDismissed') === '1'; } catch { return false; }
+  });
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appliedUrlRef = useRef<string | undefined>(undefined);
+  // Currently-running game (per native `getRunningGame()`), polled so the
+  // Play button can flip to "Close" and so launching a different game can
+  // prompt to close the running one first.
+  const [runningGame, setRunningGame] = useState<{ game: string; build: string } | null>(null);
+  const runningGameRef = useRef<{ game: string; build: string; secondsPlayed: number } | null>(null);
+  const [pendingPlayBuild, setPendingPlayBuild] = useState<InstalledBuild | null>(null);
 
   const visibleGames = useMemo(() => {
     return getVisibleGames(user?.role, user?.assignedGames || []);
@@ -231,7 +340,17 @@ export function Library() {
     platform: launcherPlatform,
     arch: launcherArch,
   } = releasesState;
-  const [installedInfo, setInstalledInfo] = useState<InstalledInfo | null>(null);
+  // Every build of the selected game that is currently installed in its own
+  // `builds/<tag>/` directory (see games.rs::get_installed_builds). Multiple
+  // builds can coexist side-by-side now that updates no longer overwrite.
+  const [installedBuilds, setInstalledBuilds] = useState<InstalledBuild[]>([]);
+
+  // The installed build matching the user's current version-picker selection
+  // (if any) -- i.e. the build that Play/Uninstall/Update should target.
+  const selectedBuild = useMemo(
+    () => findInstalledBuild(installedBuilds, selectedTag, selectedAsset),
+    [installedBuilds, selectedTag, selectedAsset],
+  );
 
   // Compute the download URL prefix passed to the launcher's Update().
   const releaseDownloadPrefix = useMemo(() => {
@@ -239,43 +358,61 @@ export function Library() {
     return buildReleaseDownloadPrefix(githubRepo, selectedTag);
   }, [githubRepo, selectedTag, selectedGame?.githubReleaseUrl]);
 
-  // Build the per-release API URL used by the launcher's NeedsUpdate().
-  const releaseApiUrl = useMemo(() => {
-    if (githubRepo && selectedTag) {
-      return `https://api.github.com/repos/${githubRepo}/releases/tags/${encodeURIComponent(selectedTag)}`;
-    }
-    return selectedGame?.githubApiUrl ?? '';
-  }, [githubRepo, selectedTag, selectedGame?.githubApiUrl]);
-
-  // Treat a build/version mismatch with what's installed as needing an update.
+  // With per-build directories, picking a tag/asset that isn't installed no
+  // longer means "needs an update" -- it means "install this as a new,
+  // separate build". `selectionMismatch` now flags exactly that: the user has
+  // *some* build(s) installed, but none matches their current selection, so
+  // the action button should read "Install" (a fresh side-by-side install)
+  // rather than "Update" (refresh the selected build in place).
   const selectionMismatch = useMemo(() => {
-    if (!installedInfo) return false;
-    if (selectedTag && installedInfo.version && installedInfo.version !== selectedTag) return true;
-    if (selectedAsset && installedInfo.asset && installedInfo.asset !== selectedAsset) return true;
-    return false;
-  }, [installedInfo, selectedTag, selectedAsset]);
+    if (installedBuilds.length === 0) return false;
+    return !selectedBuild;
+  }, [installedBuilds, selectedBuild]);
 
-  // Detect when a newer release is available than what is currently installed,
-  // as long as the user has not explicitly pinned to a different (older) version.
-  // Respects the installed channel: a nightly install only upgrades to a newer
-  // nightly; a stable install only upgrades to a newer stable release.
-  const newerReleaseAvailable = useMemo(() => {
-    if (!installedInfo?.version) return false;
-    // If the user has explicitly pinned to a different version than installed,
-    // selectionMismatch already handles showing the update button.
-    if (selectedTag && installedInfo.version !== selectedTag) return false;
-    const installedIsNightly = allReleases.find(r => r.tag === installedInfo.version)?.prerelease ?? false;
+  // Latest release tag in the same channel as the currently selected/installed
+  // build (a nightly install only looks at other nightlies, a stable install
+  // only at other stable releases). `null` when there's no basis for
+  // comparison, or the user has explicitly pinned to a different (older)
+  // version than what's installed -- selectionMismatch handles that case.
+  const latestChannelTag = useMemo(() => {
+    if (!selectedBuild?.version) return null;
+    if (selectedTag && selectedBuild.version !== selectedTag) return null;
+    const installedIsNightly = allReleases.find(r => r.tag === selectedBuild.version)?.prerelease ?? false;
     const candidates = allReleases.filter(r => r.prerelease === installedIsNightly);
-    const latestTag = candidates[0]?.tag;
-    return !!latestTag && latestTag !== installedInfo.version;
-  }, [installedInfo, selectedTag, allReleases]);
+    return candidates[0]?.tag ?? null;
+  }, [selectedBuild, selectedTag, allReleases]);
+
+  // When a newer release exists but the user already has it installed as its
+  // own side-by-side build, there's nothing to download -- the action should
+  // just point the version picker at that build so Play targets it directly,
+  // not redownload something that's already on disk.
+  const newerInstalledBuild = useMemo(() => {
+    if (!latestChannelTag || latestChannelTag === selectedBuild?.version) return null;
+    return installedBuilds.find(b => b.version === latestChannelTag) ?? null;
+  }, [latestChannelTag, selectedBuild, installedBuilds]);
+
+  // Detect when a newer release is available *and actually needs downloading*
+  // -- i.e. it isn't already sitting on disk as a separate build (that's
+  // `newerInstalledBuild`'s job, which just switches the selection instead).
+  const newerReleaseAvailable = useMemo(() => {
+    if (!latestChannelTag || !selectedBuild?.version) return false;
+    return latestChannelTag !== selectedBuild.version && !newerInstalledBuild;
+  }, [latestChannelTag, selectedBuild, newerInstalledBuild]);
+
+  // Switch the version-picker selection to an already-installed build (e.g.
+  // hopping from an older side-by-side install to the latest one) without
+  // touching the filesystem -- Play/Uninstall then retarget immediately.
+  const switchToInstalledBuild = useCallback((build: InstalledBuild) => {
+    setSelectedTag(build.version);
+    setSelectedAsset(build.asset);
+  }, [setSelectedTag, setSelectedAsset]);
 
   // When a newer version is available (and the user hasn't pinned to a different
   // version), resolve update targets to the correct channel; otherwise fall back
   // to whatever the user has currently selected.
   const updateInfo = useMemo(() => {
     if (newerReleaseAvailable && githubRepo && selectedGame) {
-      const installedIsNightly = allReleases.find(r => r.tag === installedInfo?.version)?.prerelease ?? false;
+      const installedIsNightly = allReleases.find(r => r.tag === selectedBuild?.version)?.prerelease ?? false;
       const target = allReleases.filter(r => r.prerelease === installedIsNightly)[0];
       if (target) {
         const targetSorted = sortAssetsByRelevance(target.assets, launcherPlatform, launcherArch);
@@ -299,7 +436,7 @@ export function Library() {
       }
     }
     return { tag: selectedTag, prefix: releaseDownloadPrefix, asset: selectedAsset };
-  }, [newerReleaseAvailable, githubRepo, allReleases, installedInfo, selectedGame, selectedTag, releaseDownloadPrefix, selectedAsset, launcherPlatform, launcherArch]);
+  }, [newerReleaseAvailable, githubRepo, allReleases, selectedBuild, selectedGame, selectedTag, releaseDownloadPrefix, selectedAsset, launcherPlatform, launcherArch]);
 
   const triggerUpdate = useCallback(() => {
     if (!selectedGame) return;
@@ -380,9 +517,13 @@ export function Library() {
     const w = window as any;
     if (selectedGame) {
       setIsoInstalled(w.isIsoInstalled ? w.isIsoInstalled(selectedGame.recompName) : false);
-      setExeUpdated(w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName) : false);
-      setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, releaseApiUrl, selectedAsset ?? '') : false);
-      setInstalledInfo(readInstalledInfo(selectedGame.recompName));
+      // Re-read the full set of installed builds, then resolve the one
+      // matching the current version-picker selection (if any) -- that's the
+      // build whose exe/update status we report and that Play/Uninstall act on.
+      const builds = readInstalledBuilds(selectedGame.recompName);
+      setInstalledBuilds(builds);
+      const matching = findInstalledBuild(builds, selectedTag, selectedAsset);
+      setExeUpdated(matching && w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName, matching.name) : false);
       const isUp = w.isUpdating ? w.isUpdating(selectedGame.id) : false;
       setUpdating(isUp);
       if (isUp) {
@@ -396,22 +537,129 @@ export function Library() {
         setExtractString(w.getExtractString ? w.getExtractString(selectedGame.id) : 'Extracting...');
       }
     }
-  }, [selectedGame, releaseApiUrl, selectedAsset]);
+  }, [selectedGame, selectedTag, selectedAsset]);
 
   useEffect(() => {
     checkState();
   }, [checkState]);
 
-  // Check launcher version on mount
+  // Poll the running game (drives the Play/Close button swap and the
+  // close-confirmation prompt). Whenever the tracked game/build changes —
+  // whether the process exited on its own or was closed to launch another —
+  // record the finished session's playtime against the game it belongs to.
+  useEffect(() => {
+    const w = window as any;
+    if (typeof w.getRunningGame !== 'function') return;
+    const poll = () => {
+      const running = w.getRunningGame();
+      const prev = runningGameRef.current;
+      const next = running
+        ? { game: String(running.game), build: String(running.build), secondsPlayed: Number(running.secondsPlayed) || 0 }
+        : null;
+
+      if (prev && (prev.game !== next?.game || prev.build !== next?.build)) {
+        const finishedGame = games.find(g => g.recompName === prev.game);
+        if (finishedGame) void recordSession(finishedGame.id, prev.secondsPlayed);
+      }
+
+      runningGameRef.current = next;
+      setRunningGame(prevState => {
+        if (prevState?.game === next?.game && prevState?.build === next?.build) return prevState;
+        return next ? { game: next.game, build: next.build } : null;
+      });
+    };
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => clearInterval(interval);
+  }, [games, recordSession]);
+
+  // Launch a specific installed build directly (used by the "Installed builds"
+  // list, independent of whichever build the version picker currently targets).
+  const playBuild = useCallback((build: InstalledBuild) => {
+    if (!selectedGame) return;
+    const w = window as any;
+    if (typeof w.Play !== 'function') return;
+    setAudioMuted(true);
+    w.Play(selectedGame.recompName, build.name, buildCvarArgs(), undefined, selectedGame.setGameDataRootToAssets === true);
+  }, [selectedGame, buildCvarArgs]);
+
+  // Name of the running build, if it belongs to the selected game (used to
+  // mark the matching row in the installed-builds list as "running").
+  const runningBuildForSelectedGame = (selectedGame && runningGame && runningGame.game === selectedGame.recompName)
+    ? runningGame.build
+    : null;
+
+  // Whether the build the big Play/Close button currently targets is the one
+  // actually running (vs. a different build of the same game, or another game
+  // entirely — both of which still show "Play" but prompt to close first).
+  const isSelectedBuildRunning = !!(selectedBuild && runningBuildForSelectedGame === selectedBuild.name);
+
+  // Entry point for any Play action: if a *different* game — or a different
+  // build of this game — is running, prompt before closing it (unsaved
+  // progress is lost); otherwise launch directly.
+  const requestPlay = useCallback((build: InstalledBuild) => {
+    if (!selectedGame) return;
+    if (runningGame && (runningGame.game !== selectedGame.recompName || runningGame.build !== build.name)) {
+      setPendingPlayBuild(build);
+      return;
+    }
+    playBuild(build);
+  }, [selectedGame, runningGame, playBuild]);
+
+  // Closes whatever game is currently running (used both by the "Close" button
+  // and, after confirmation, right before launching a different game).
+  const closeRunningGame = useCallback(() => {
+    const w = window as any;
+    if (typeof w.closeGame === 'function') w.closeGame();
+  }, []);
+
+  const confirmCloseAndPlay = useCallback(() => {
+    const build = pendingPlayBuild;
+    setPendingPlayBuild(null);
+    if (!build) return;
+    closeRunningGame();
+    playBuild(build);
+  }, [pendingPlayBuild, closeRunningGame, playBuild]);
+
+  // Remove a single installed build's directory (leaves saves/assets and any
+  // other installed builds of the same game untouched).
+  const removeBuild = useCallback((build: InstalledBuild) => {
+    if (!selectedGame) return;
+    const w = window as any;
+    if (typeof w.Uninstall !== 'function') return;
+    w.Uninstall(selectedGame.recompName, build.name);
+    // If the build we just removed is the one the picker is currently
+    // pointed at, retarget the selection to whatever's left (newest first) so
+    // the UI shows that build instead of "Not installed" when there's
+    // actually another side-by-side install available.
+    if (selectedBuild?.name === build.name) {
+      const remaining = readInstalledBuilds(selectedGame.recompName);
+      const next = remaining[0] ?? null;
+      setSelectedTag(next?.version);
+      setSelectedAsset(next?.asset);
+    }
+    checkState();
+  }, [selectedGame, selectedBuild, setSelectedTag, setSelectedAsset, checkState]);
+
+  // Delete the extracted ISO/asset data for the selected game (reclaiming the
+  // disk space it takes up) without touching saves or any installed builds.
+  // Only meaningful once every build has been uninstalled -- while a build is
+  // still around, removing assets out from under it would break it.
+  const removeAssets = useCallback(() => {
+    if (!selectedGame) return;
+    const w = window as any;
+    if (typeof w.RemoveAssets !== 'function') return;
+    w.RemoveAssets(selectedGame.recompName);
+    checkState();
+  }, [selectedGame, checkState]);
+
+  // Check launcher version on mount. (Launcher self-update state itself now
+  // lives in LauncherUpdateContext / the TopBar update icon — see App.tsx.)
   useEffect(() => {
     const w = window as any;
     if (w.getVersion) {
       const version = w.getVersion();
-      const validVersion = typeof version === 'number' && isFinite(version);
-      setIsInCEF(validVersion);
-      if (validVersion) {
-        setLauncherOutdated(version < EXPECTED_LAUNCHER_VERSION);
-      }
+      setIsInCEF(typeof version === 'string');
     }
   }, []);
 
@@ -437,9 +685,10 @@ export function Library() {
             setDownloadProgress(w.getDownloadProgress ? w.getDownloadProgress(selectedGame.id) : 0);
             setDownloadString(w.getDownloadString ? w.getDownloadString(selectedGame.id) : '');
           } else {
-            setExeUpdated(w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName) : false);
-            setNeedsUpdate(w.NeedsUpdate ? w.NeedsUpdate(selectedGame.recompName, releaseApiUrl, selectedAsset ?? '') : false);
-            setInstalledInfo(readInstalledInfo(selectedGame.recompName));
+            const builds = readInstalledBuilds(selectedGame.recompName);
+            setInstalledBuilds(builds);
+            const matching = findInstalledBuild(builds, selectedTag, selectedAsset);
+            setExeUpdated(matching && w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName, matching.name) : false);
           }
           // Extract check
           const isExt = w.isExtracting ? w.isExtracting(selectedGame.id) : false;
@@ -456,7 +705,7 @@ export function Library() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [updating, extracting, selectedGame]);
+  }, [updating, extracting, selectedGame, selectedTag, selectedAsset]);
 
   // Steady-state install-state refresh (1.5 s) while inside the launcher and
   // not already in a fast-poll cycle.  This ensures that completing an ISO
@@ -498,6 +747,11 @@ export function Library() {
     try { localStorage.setItem('goopie:infoBannerDismissed', infoBannerDismissed ? '1' : '0'); } catch { /* quota */ }
   }, [infoBannerDismissed]);
 
+  // Persist the legacy-launcher upgrade-banner dismissal across page loads.
+  useEffect(() => {
+    try { localStorage.setItem('goopie:legacyLauncherBannerDismissed', legacyBannerDismissed ? '1' : '0'); } catch { /* quota */ }
+  }, [legacyBannerDismissed]);
+
   const handleSelectGame = useCallback((id: string) => {
     setSelectedGameId(id);
     setShowMobileDetail(true);
@@ -535,19 +789,28 @@ export function Library() {
   return (
     <div className={`flex h-screen flex-col relative ${SIDEBAR_WIDTH_CLASS}`} style={{ backgroundColor: 'var(--theme-page-bg)' }}>
       <Sidebar />
-      {launcherOutdated && (
-        <div
-          className="bg-[#b8860b] px-4 md:px-6 py-2 md:py-3 flex items-center justify-center gap-2 md:gap-3 relative z-10 cursor-pointer hover:bg-[#cfa52a] transition-colors"
-          onClick={() => openExternal('https://goopie.xyz/')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openExternal('https://goopie.xyz/'); }}
-          title="Download the latest launcher"
-        >
-          <AlertTriangle className="w-5 h-5 text-white shrink-0" />
-          <span className="text-white font-semibold text-xs md:text-sm">
-            Your launcher is outdated. Please download the latest version from <span className="underline">goopie.xyz</span>
+      {/* Launcher self-update prompt now lives in the TopBar's "update available"
+          icon + LauncherUpdateDialog (see LauncherUpdateContext / App.tsx). */}
+      {isLegacyLauncher && !legacyBannerDismissed && (
+        <div className="bg-yellow-400 px-4 md:px-6 py-2 flex items-center justify-center gap-2 md:gap-3 relative z-10 text-center pr-8">
+          <AlertTriangle className="w-4 h-4 text-yellow-950 shrink-0" />
+          <span className="text-yellow-950 text-xs md:text-sm font-semibold leading-tight">
+            A new, self-updating Goopie launcher is available.{' '}
+            <a
+              className="underline font-bold cursor-pointer hover:text-black"
+              onClick={() => openExternal('https://goopie.xyz/downloads')}
+            >
+              Download it at goopie.xyz/downloads
+            </a>
+            . Please uninstall the old launcher before installing the new one.
           </span>
+          <button
+            onClick={() => setLegacyBannerDismissed(true)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-yellow-950 hover:text-black transition-colors"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
       {!infoBannerDismissed && (
@@ -608,6 +871,7 @@ export function Library() {
                   Browser/CEF: 1 s opacity cross-fade.  Tauri: instant (no transition). */}
               <div className="relative h-[200px] md:h-[500px] overflow-hidden z-10 ">
                 {([{ id: 'A', slot: slotA }, { id: 'B', slot: slotB }] as const).map(({ id, slot }) => (
+                  slot.src ? (
                   <img
                     key={id}
                     src={slot.src}
@@ -618,6 +882,7 @@ export function Library() {
                       transition: isTauri ? undefined : 'opacity 1s ease-in-out',
                     }}
                   />
+                  ) : null
                 ))}
                 <div className="absolute inset-0" style={{ backgroundColor: 'var(--theme-header-color)', mixBlendMode: 'multiply' }} />
                 <div className="absolute inset-0" style={{ backgroundColor: 'var(--theme-header-overlay)' }} />
@@ -759,42 +1024,53 @@ export function Library() {
                             <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>{downloadString}</p>
                           </div>
                         ) : exeUpdated ? (
-                          /* Ready to play */
+                          /* Selected build is installed and ready to play */
                           <div className="flex flex-wrap gap-3">
-                            <Button
-                              className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
-                              onClick={() => {
-                                setAudioMuted(true);
-                                (window as any).Play(
-                                  selectedGame.recompName,
-                                  buildCvarArgs(),
-                                  undefined,
-                                  selectedGame.setGameDataRootToAssets === true
-                                );
-                              }}
-                            >
-                              <Play className="w-5 h-5 mr-2" />
-                              Play
-                            </Button>
-                            {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
+                            {isSelectedBuildRunning ? (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
+                                onClick={closeRunningGame}
+                              >
+                                <X className="w-5 h-5 mr-2" />
+                                Close
+                              </Button>
+                            ) : (
+                              <Button
+                                className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
+                                onClick={() => selectedBuild && requestPlay(selectedBuild)}
+                              >
+                                <Play className="w-5 h-5 mr-2" />
+                                Play
+                              </Button>
+                            )}
+                            {(selectionMismatch || newerReleaseAvailable) && (
                               <Button
                                 className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
                                 onClick={triggerUpdate}
                               >
                                 <Download className="w-5 h-5 mr-2" />
-                                Update
+                                {selectedBuild ? 'Update' : 'Install'}
                               </Button>
                             )}
-                            <Button
-                              className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
-                              onClick={() => {
-                                (window as any).Uninstall(selectedGame.recompName);
-                                checkState();
-                              }}
-                            >
-                              <Trash2 className="w-5 h-5 mr-2" />
-                              Uninstall
-                            </Button>
+                            {newerInstalledBuild && (
+                              <Button
+                                className="text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
+                                style={{ backgroundColor: 'var(--theme-accent)' }}
+                                onClick={() => switchToInstalledBuild(newerInstalledBuild)}
+                              >
+                                <RefreshCw className="w-5 h-5 mr-2" />
+                                Switch to {newerInstalledBuild.version || newerInstalledBuild.name}
+                              </Button>
+                            )}
+                            {selectedBuild && (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
+                                onClick={() => removeBuild(selectedBuild)}
+                              >
+                                <Trash2 className="w-5 h-5 mr-2" />
+                                Uninstall
+                              </Button>
+                            )}
                             {!selectedGame.disableSaveManager && (
                             <Button
                               className="text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
@@ -819,25 +1095,34 @@ export function Library() {
                             */}
                           </div>
                         ) : (
-                          /* Needs update */
+                          /* Selected build isn't installed yet, or its exe is stale --
+                             either way the action installs it into its own build dir
+                             without touching any other installed build. */
                           <div className="flex flex-wrap gap-3">
                             <Button
                               className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-3 md:px-8 md:py-6 text-sm md:text-lg"
                               onClick={triggerUpdate}
                             >
                               <Download className="w-5 h-5 mr-2" />
-                              Update
+                              {selectedBuild ? 'Update' : 'Install'}
                             </Button>
-                            <Button
-                              className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
-                              onClick={() => {
-                                (window as any).Uninstall(selectedGame.recompName);
-                                checkState();
-                              }}
-                            >
-                              <Trash2 className="w-5 h-5 mr-2" />
-                              Uninstall
-                            </Button>
+                            {selectedBuild ? (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
+                                onClick={() => removeBuild(selectedBuild)}
+                              >
+                                <Trash2 className="w-5 h-5 mr-2" />
+                                Uninstall
+                              </Button>
+                            ) : installedBuilds.length === 0 && isoInstalled && (
+                              <Button
+                                className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-3 md:px-6 md:py-6 text-sm md:text-lg"
+                                onClick={removeAssets}
+                              >
+                                <Trash2 className="w-5 h-5 mr-2" />
+                                Remove assets
+                              </Button>
+                            )}
                           </div>
                         )
                       ) : (
@@ -866,12 +1151,13 @@ export function Library() {
                             setSelectedAsset={setSelectedAsset}
                             showNightlies={showNightlies}
                             setShowNightlies={setShowNightlies}
-                            installed={installedInfo}
+                            installed={selectedBuild}
                             loading={releasesLoading}
                             error={releasesError}
                             stale={releasesStale}
                             updatedAt={releasesUpdatedAt}
                           />
+                          <InstalledBuildsList builds={installedBuilds} onPlay={requestPlay} onClose={closeRunningGame} onRemove={removeBuild} runningBuild={runningBuildForSelectedGame} />
                         </div>
                       )}
                     </div>
@@ -1085,17 +1371,34 @@ export function Library() {
                         </div>
                       ) : exeUpdated ? (
                         <div className="flex flex-wrap gap-2">
-                          <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => { setAudioMuted(true); (window as any).Play(selectedGame.recompName, buildCvarArgs(), undefined, selectedGame.setGameDataRootToAssets === true); }}>
-                            <Play className="w-4 h-4 mr-1" /> Play
-                          </Button>
-                          {(needsUpdate || selectionMismatch || newerReleaseAvailable) && (
-                            <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
-                              <Download className="w-4 h-4 mr-1" /> Update
+                          {isSelectedBuildRunning ? (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={closeRunningGame}>
+                              <X className="w-4 h-4 mr-1" /> Close
+                            </Button>
+                          ) : (
+                            <Button className="bg-[#5c7e10] hover:bg-[#78a00f] text-white px-4 py-2 text-sm" onClick={() => selectedBuild && requestPlay(selectedBuild)}>
+                              <Play className="w-4 h-4 mr-1" /> Play
                             </Button>
                           )}
-                          <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Uninstall(selectedGame.recompName); checkState(); }}>
-                            <Trash2 className="w-4 h-4 mr-1" /> Uninstall
-                          </Button>
+                          {(selectionMismatch || newerReleaseAvailable) && (
+                            <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
+                              <Download className="w-4 h-4 mr-1" /> {selectedBuild ? 'Update' : 'Install'}
+                            </Button>
+                          )}
+                          {newerInstalledBuild && (
+                            <Button
+                              className="text-white px-4 py-2 text-sm"
+                              style={{ backgroundColor: 'var(--theme-accent)' }}
+                              onClick={() => switchToInstalledBuild(newerInstalledBuild)}
+                            >
+                              <RefreshCw className="w-4 h-4 mr-1" /> Switch to {newerInstalledBuild.version || newerInstalledBuild.name}
+                            </Button>
+                          )}
+                          {selectedBuild && (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => removeBuild(selectedBuild)}>
+                              <Trash2 className="w-4 h-4 mr-1" /> Uninstall
+                            </Button>
+                          )}
                           {!selectedGame.disableSaveManager && (
                             <Button className="text-white px-4 py-2 text-sm" style={{ backgroundColor: 'var(--theme-accent)' }} onClick={() => navigate(`/${selectedGame.recompName}/saves`)}>
                               <Save className="w-4 h-4 mr-1" /> Saves
@@ -1112,11 +1415,17 @@ export function Library() {
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           <Button className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white px-4 py-2 text-sm" onClick={triggerUpdate}>
-                            <Download className="w-4 h-4 mr-1" /> Update
+                            <Download className="w-4 h-4 mr-1" /> {selectedBuild ? 'Update' : 'Install'}
                           </Button>
-                          <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => { (window as any).Uninstall(selectedGame.recompName); checkState(); }}>
-                            <Trash2 className="w-4 h-4 mr-1" /> Uninstall
-                          </Button>
+                          {selectedBuild ? (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={() => removeBuild(selectedBuild)}>
+                              <Trash2 className="w-4 h-4 mr-1" /> Uninstall
+                            </Button>
+                          ) : installedBuilds.length === 0 && isoInstalled && (
+                            <Button className="bg-[#8b1a1a] hover:bg-[#a52525] text-white px-4 py-2 text-sm" onClick={removeAssets}>
+                              <Trash2 className="w-4 h-4 mr-1" /> Remove assets
+                            </Button>
+                          )}
                         </div>
                       )
                     ) : (
@@ -1137,12 +1446,13 @@ export function Library() {
                           setSelectedAsset={setSelectedAsset}
                           showNightlies={showNightlies}
                           setShowNightlies={setShowNightlies}
-                          installed={installedInfo}
+                          installed={selectedBuild}
                           loading={releasesLoading}
                           error={releasesError}
                           stale={releasesStale}
                           updatedAt={releasesUpdatedAt}
                         />
+                        <InstalledBuildsList builds={installedBuilds} onPlay={requestPlay} onClose={closeRunningGame} onRemove={removeBuild} runningBuild={runningBuildForSelectedGame} compact />
                       </div>
                     )}
                   </div>
@@ -1472,6 +1782,38 @@ export function Library() {
           onClose={() => { setShowEditor(false); setIsPreviewing(false); }}
         />
       )}
+
+      {/* Confirm closing the running game before launching a different one */}
+      <Dialog open={!!pendingPlayBuild} onOpenChange={(o) => { if (!o) setPendingPlayBuild(null); }}>
+        <DialogContent
+          className="sm:max-w-md"
+          style={{ backgroundColor: 'var(--theme-card-bg)', borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ color: 'var(--theme-text-primary)' }}>Close the running game?</DialogTitle>
+            <DialogDescription style={{ color: 'var(--theme-text-muted)' }}>
+              {runningGame ? `${runningGame.game} is currently running. ` : ''}
+              Launching this game will close it first, and any unsaved progress will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setPendingPlayBuild(null)}
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmCloseAndPlay}
+              className="gap-2 bg-[#8b1a1a] hover:bg-[#a52525] text-white border-0"
+            >
+              <X className="w-4 h-4" />
+              Close & Play
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

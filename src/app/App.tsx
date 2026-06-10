@@ -2,6 +2,7 @@ import { RouterProvider } from 'react-router';
 import { router } from './routes';
 import { AuthProvider } from './auth/AuthContext';
 import { GameStoreProvider } from './data/GameStore';
+import { LauncherUpdateProvider } from './data/LauncherUpdateContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import { BackgroundAccentProvider } from './theme/BackgroundAccentContext';
 import { ThemeBackground } from './components/ThemeBackground';
@@ -13,9 +14,11 @@ export default function App() {
       <BackgroundAccentProvider>
         <AuthProvider>
           <GameStoreProvider>
-            <ThemeBackground />
-            <RouterProvider router={router} />
-            <FpsCounter />
+            <LauncherUpdateProvider>
+              <ThemeBackground />
+              <RouterProvider router={router} />
+              <FpsCounter />
+            </LauncherUpdateProvider>
           </GameStoreProvider>
         </AuthProvider>
       </BackgroundAccentProvider>

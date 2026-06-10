@@ -6,7 +6,7 @@ import { Footer } from '../components/Footer';
 export function NotFound() {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <TopBar />
+      <TopBar searchQuery="" onSearchChange={() => {}} />
       <div className="flex flex-1">
         <Sidebar />
         <main
