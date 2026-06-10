@@ -44,7 +44,9 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "dist/*"
+          # "dist/*" misses dotfiles, so .htaccess is listed explicitly to make
+          # sure the cache/SPA-rewrite rules are (re)deployed and overwritten.
+          source: "dist/*,dist/.htaccess"
           target: "${{ secrets.DEPLOY_PATH }}"
           strip_components: 1
 
