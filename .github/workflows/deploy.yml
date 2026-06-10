@@ -24,21 +24,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-
-      - name: Download latest launcher release assets into dist
-        run: |
-          RELEASE=$(curl -s https://api.github.com/repos/SolarCookies/GoopieWebsite/releases | jq '[.[] | select(.tag_name | startswith("r"))] | first')
-          MSI_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "GoopieLauncher.msi") | .browser_download_url')
-          XEX_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "default.xex") | .browser_download_url')
-          curl -L "$MSI_URL" -o dist/GoopieLauncher.msi
-          curl -L "$XEX_URL" -o dist/default.xex
 
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1
@@ -47,8 +32,11 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            rm -rf ${{ secrets.DEPLOY_PATH }}/*
-            mkdir -p ${{ secrets.DEPLOY_PATH }}
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            : "${DEPLOY_PATH:?DEPLOY_PATH secret is empty}"
+            rm -rf "${DEPLOY_PATH:?}"/*
+            mkdir -p "$DEPLOY_PATH"
 
       - name: Upload dist to server
         uses: appleboy/scp-action@v0.1.7
