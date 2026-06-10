@@ -1,5 +1,14 @@
 Options -MultiViews
 RewriteEngine On
+
+# Content-hashed assets live under /assets/. If one is missing it means a stale
+# client is requesting an old chunk hash — return a clean 404 instead of falling
+# through to the SPA shell below (which would serve index.html as text/html and
+# break dynamic import() with a confusing MIME-type error).
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^assets/.+ - [R=404,L]
+
+# SPA fallback: everything else that isn't a real file/dir serves the app shell.
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ /index.html [QSA,L]
