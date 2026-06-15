@@ -42,19 +42,23 @@ import { GameVersionPicker } from '../components/GameVersionPicker';
 import { isInLauncher, isInTauriLauncher, openExternal as openExternalUrl } from '../utils/externalLink';
 
 const statusColors: Record<Game['status'], string> = {
-  Ingame: 'bg-red-500 text-white',
-  Stable: 'bg-green-500 text-white',
-  Playable: 'bg-white text-black',
+  Featured: 'bg-purple-600 text-white',
   Enhanced: 'bg-blue-500 text-white',
-  External: 'bg-orange-500 text-white',
+  Playable: 'bg-green-700 text-white',
+  Gameplay: 'bg-green-400 text-black',
+  Loads: 'bg-orange-500 text-white',
+  Unplayable: 'bg-red-500 text-white',
+  Unknown: 'bg-gray-600 text-white',
 };
 
 const statusDescriptions: Record<Game['status'], string> = {
-  Enhanced: '100% playable with no crashes and includes mods',
-  Stable: '100% playable with no crashes',
-  Playable: 'Very little crashes',
-  Ingame: 'Very little crashes but has graphics issues',
-  External: 'Uses an external launcher download',
+  Featured: 'Creator curated — Enhanced and recommended by the Rexglue team',
+  Enhanced: 'Playable with enhancements like mods or texture packs',
+  Playable: 'Works from start to finish with minor issues',
+  Gameplay: 'Can get into gameplay, completion unknown',
+  Loads: 'Reaches the main menu',
+  Unplayable: 'Crashes too much or has major issues',
+  Unknown: 'Untested',
 };
 
 /**
@@ -162,7 +166,7 @@ export function Library() {
   const { setAccentColor } = useBackgroundAccent();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [statusFilters, setStatusFilters] = useState<Game['status'][]>(['Enhanced', 'Stable', 'Playable', 'External']);
+  const [statusFilters, setStatusFilters] = useState<Game['status'][]>(['Featured', 'Enhanced', 'Playable', 'Gameplay', 'Loads']);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [hideExternal, setHideExternal] = useState(false);
   const [platformFilters, setPlatformFilters] = useState<Platform[]>(() => {
@@ -230,11 +234,13 @@ export function Library() {
   }, [games, user, getVisibleGames]);
 
   const statusOrder: Record<Game['status'], number> = {
-    Enhanced: 0,
-    Stable: 1,
+    Featured: 0,
+    Enhanced: 1,
     Playable: 2,
-    Ingame: 3,
-    External: 4,
+    Gameplay: 3,
+    Loads: 4,
+    Unplayable: 5,
+    Unknown: 6,
   };
 
   const allTags = useMemo(() => {
@@ -271,7 +277,6 @@ export function Library() {
         const matchesStatus = statusFilters.length === 0 || statusFilters.includes(game.status);
         const matchesTags = tagFilters.length === 0 || tagFilters.some(tag => game.Tags.includes(tag));
         const matchesExternal = !hideExternal || !game.externalLauncherUrl;
-        if (isInCEF && game.status === 'External') return false;
         const matchesPlatform = platformFilters.length === 0 || platformFilters.some(p => game.platforms?.includes(p));
         return matchesStatus && matchesTags && matchesExternal && matchesPlatform;
       })
@@ -899,9 +904,26 @@ export function Library() {
                 )}
                 <div className="absolute inset-0" style={{ background: `linear-gradient(to top, var(--theme-page-bg), color-mix(in srgb, var(--theme-page-bg) 50%, transparent), transparent)` }}></div>
 
+                {/* Discord widget — top-right of header */}
+                {selectedGame.discordGuildId && !isInCEF && (
+                  <div className="absolute top-3 right-3 z-20 hidden md:block rounded-xl overflow-hidden shadow-2xl" style={{ width: 300, height: 420 }}>
+                    <iframe
+                      src={`https://discord.com/widget?id=${selectedGame.discordGuildId}&theme=dark`}
+                      width="300"
+                      height="420"
+                      allowTransparency={true}
+                      frameBorder={0}
+                      sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+                      title="Discord"
+                      className="w-full h-full block"
+                    />
+                  </div>
+                )}
+
                 {/* Desktop: overlay content on the header image */}
                 <div className="absolute bottom-0 left-0 right-0 p-4 hidden md:block">
                   <div className="flex items-center gap-3 mb-4 flex-wrap">
+                    {!selectedGame.hideTitleText && (
                     <h1
                       className="text-5xl font-bold"
                       style={{
@@ -911,6 +933,7 @@ export function Library() {
                     >
                       {selectedGame.title}
                     </h1>
+                    )}
                     {selectedGame.isPublic === false && (
                       <span className="px-3 py-1 rounded-full text-xs font-bold bg-orange-500 text-white flex items-center gap-1">
                         <EyeOff className="w-3 h-3" /> Not Public
@@ -1678,6 +1701,7 @@ export function Library() {
                         </div>
                       </div>
                     )}
+
                   </div>
                 </div>
               </div>
@@ -1849,7 +1873,7 @@ function GameNewsSection({ posts }: { posts: import('../data/useNews').NewsPost[
       <h2 className="text-2xl font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--theme-text-primary)' }}>
         <Newspaper className="w-5 h-5" /> News
       </h2>
-      <div className="space-y-6">
+      <div className="space-y-3">
         {ordered.map((post) => (
           <GameNewsHeader key={post.id} post={post} />
         ))}
@@ -1863,6 +1887,7 @@ function GameNewsHeader({ post }: { post: import('../data/useNews').NewsPost }) 
     ? post.thumbnails
     : (post.thumbnail ? [post.thumbnail] : []);
   const [imgIdx, setImgIdx] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   const displayDate = post.publishedAt ?? post.createdAt;
   const tags = post.tags || [];
   const cover = images[imgIdx];
@@ -1871,6 +1896,25 @@ function GameNewsHeader({ post }: { post: import('../data/useNews').NewsPost }) 
       className="rounded-lg overflow-hidden"
       style={{ border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-page-bg)' }}
     >
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+        style={{ color: 'var(--theme-text-primary)' }}
+      >
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold truncate">{post.title || 'Untitled'}</span>
+          <span className="text-xs opacity-60">
+            {formatNewsDate(displayDate)}{post.authorName ? ` • ${post.authorName}` : ''}
+          </span>
+        </div>
+        <ChevronDown
+          className="w-4 h-4 shrink-0 transition-transform"
+          style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        />
+      </button>
+      {expanded && (
+        <div>
       {cover && (
         <div className="relative w-full" style={{ aspectRatio: '21 / 9', backgroundColor: 'rgba(0,0,0,0.4)' }}>
           <img
@@ -1964,6 +2008,8 @@ function GameNewsHeader({ post }: { post: import('../data/useNews').NewsPost }) 
           <Markdown source={post.body || ''} />
         </div>
       </div>
+        </div>
+      )}
     </article>
   );
 }
