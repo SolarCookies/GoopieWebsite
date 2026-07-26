@@ -42,6 +42,8 @@ export function GameManageModal({ game, open, onClose, canEdit, onSaveGame, isIn
   const [installedDlc, setInstalledDlc] = useState<InstalledDlc[]>([]);
   const [desktopShortcutCreated, setDesktopShortcutCreated] = useState(false);
   const [appShortcutCreated, setAppShortcutCreated] = useState(false);
+  const [steamShortcutCreated, setSteamShortcutCreated] = useState(false);
+  const [isSteamInstalled, setIsSteamInstalled] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: string; label: string; onConfirm: () => void } | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export function GameManageModal({ game, open, onClose, canEdit, onSaveGame, isIn
   const showAssetsTab = isLauncherVersionAtLeast('1.4.0');
   const showSavesTab = !game.disableSaveManager;
   const showShortcutRow = isLauncherVersionAtLeast('1.5.3');
+  const showSteamShortcut = isLauncherVersionAtLeast('1.7.5') && isSteamInstalled;
   const showAchievementsTab =
     isLauncherVersionAtLeast('1.5.2') &&
     !!game.achievementsEnabled &&
@@ -86,6 +89,8 @@ export function GameManageModal({ game, open, onClose, canEdit, onSaveGame, isIn
     }
     if (w.desktopShortcutExists) setDesktopShortcutCreated(!!w.desktopShortcutExists(game.recompName, game.title));
     if (w.appShortcutExists) setAppShortcutCreated(!!w.appShortcutExists(game.recompName, game.title));
+    if (w.steamShortcutExists) setSteamShortcutCreated(!!w.steamShortcutExists(game.recompName, game.title));
+    if (w.steamInstalled) setIsSteamInstalled(!!w.steamInstalled());
   }, [game.recompName, game.title]);
 
   useEffect(() => {
@@ -206,6 +211,19 @@ export function GameManageModal({ game, open, onClose, canEdit, onSaveGame, isIn
                   <Button size="sm" className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white" onClick={() => { const w = window as any; if (w.CreateAppShortcut) w.CreateAppShortcut(game.recompName, game.title, game.iconUrl || ''); setTimeout(refresh, 500); }}><Link className="w-3 h-3" /></Button>
                 )}
               </div>
+              {showSteamShortcut && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Steam</span>
+                  {steamShortcutCreated ? (
+                    <>
+                      <Check className="w-3 h-3 text-green-400" />
+                      <Button size="sm" className="bg-[#8b1a1a] hover:bg-[#a52525] text-white" onClick={() => { const w = window as any; if (w.RemoveSteamShortcut) w.RemoveSteamShortcut(game.recompName, game.title); setTimeout(refresh, 500); }}><Trash2 className="w-3 h-3" /></Button>
+                    </>
+                  ) : (
+                    <Button size="sm" className="bg-[#1a6bc4] hover:bg-[#2080e0] text-white" onClick={() => { const w = window as any; if (w.CreateSteamShortcut) { const headerImg = Array.isArray(game.headerImage) ? game.headerImage[0] || '' : game.headerImage || ''; w.CreateSteamShortcut(game.recompName, game.title, game.iconUrl || '', game.coverImage || '', headerImg, game.titleImage || ''); } setTimeout(refresh, 500); }}><Link className="w-3 h-3" /></Button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
