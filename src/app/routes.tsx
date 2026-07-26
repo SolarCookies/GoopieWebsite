@@ -26,12 +26,23 @@ function isInCEF(): boolean {
   return typeof (window as any)?.GetPlatform === 'function';
 }
 
-const LAST_ROUTE_KEY = 'goopie:lastRoute';
+// Bumped from `goopie:lastRoute`: the old key was written by a listener that
+// (due to a hashchange/pushState mismatch) stopped updating after the first
+// load, leaving many installs with a stale, arbitrary stored route. Using a
+// new key discards that bad data instead of reopening on it once more.
+export const LAST_ROUTE_KEY = 'goopie:lastRoute:v2';
+
+// "Resume where you left off" is only meant to mean the last-launched game,
+// not literally any page — reopening on Settings, Login, etc. is surprising,
+// not helpful. Only these routes are valid resume targets.
+export function isResumableRoute(path: string): boolean {
+  return path === '/library' || path.startsWith('/library/');
+}
 
 function getLastRoute(): string | null {
   try {
     const path = localStorage.getItem(LAST_ROUTE_KEY);
-    return path && path !== '/' ? path : null;
+    return path && isResumableRoute(path) ? path : null;
   } catch {
     return null;
   }

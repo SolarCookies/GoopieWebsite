@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { RouterProvider } from 'react-router';
-import { router } from './routes';
+import { router, LAST_ROUTE_KEY, isResumableRoute } from './routes';
 import { AuthProvider } from './auth/AuthContext';
 import { GameStoreProvider } from './data/GameStore';
 import { LauncherUpdateProvider } from './data/LauncherUpdateContext';
@@ -11,25 +11,27 @@ import { ThemeBackground } from './components/ThemeBackground';
 import { FpsCounter } from './components/FpsCounter';
 import { FileDropManager } from './components/FileDropManager';
 
-const LAST_ROUTE_KEY = 'goopie:lastRoute';
-
-// Persist the current hash route on every navigation so the app can reopen
-// on the last-viewed page next launch (see RootRoute in routes.tsx). Listens
-// to `hashchange` directly rather than via a router hook so it works outside
-// the RouterProvider tree.
+// Persist the current route on every navigation so the app can reopen on the
+// last-viewed page next launch (see RootRoute in routes.tsx). Subscribes to
+// the router directly rather than the `hashchange` DOM event: React Router's
+// `navigate()` updates the URL via history.pushState/replaceState, which does
+// NOT fire `hashchange` (that event only fires on direct `location.hash`
+// writes or address-bar edits), so the old listener never saw in-app
+// navigations and the stored route went stale after the very first load.
 function useLastRoutePersistence() {
   useEffect(() => {
-    const persist = () => {
-      const path = window.location.hash.replace(/^#/, '') || '/';
+    const persist = (path: string) => {
+      if (!isResumableRoute(path)) return;
       try {
         localStorage.setItem(LAST_ROUTE_KEY, path);
       } catch {
         /* ignore quota / privacy errors */
       }
     };
-    persist();
-    window.addEventListener('hashchange', persist);
-    return () => window.removeEventListener('hashchange', persist);
+    persist(router.state.location.pathname + router.state.location.search);
+    return router.subscribe(state => {
+      persist(state.location.pathname + state.location.search);
+    });
   }, []);
 }
 
