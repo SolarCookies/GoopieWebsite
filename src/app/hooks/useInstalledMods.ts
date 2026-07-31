@@ -77,7 +77,10 @@ export function useInstalledMods(recompName: string) {
     const w = window as any;
     if (typeof w.getMods !== 'function') return;
     const result = w.getMods(recompName);
-    setMods(Array.isArray(result) ? result : []);
+    // TODO: remove startsWith filter after 1.7.6 or 1.8.0 has been tagged
+    // Hide dot-prefixed mod ids even against older launcher builds whose
+    // Rust-side listing doesn't filter them out yet.
+    setMods(Array.isArray(result) ? result.filter((m: ModInfo) => !m.id.startsWith('.')) : []);
     if (typeof w.getModValidation === 'function') {
       const v = w.getModValidation(recompName);
       setValidation(v && Array.isArray(v.issues) ? v : { ok: true, issues: [] });
