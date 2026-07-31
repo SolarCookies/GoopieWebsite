@@ -125,7 +125,7 @@ type StatusFilter = 'all' | CatalogModStatus;
 
 /** Derives a slug from free text loosely matching the launcher's `sanitize_mod_id`: alphanumeric/-/_/. kept, else `_`. */
 function sanitizeModId(input: string): string {
-  return input.replace(/[^a-zA-Z0-9\-_.]/g, '_');
+  return input.replace(/[^a-zA-Z0-9\-_.]/g, '_').replace(/^\.+/, '');
 }
 
 /** Parses a mod version string (optionally `v`-prefixed) into a `[major, minor, patch]` triple, defaulting unparsed parts to 0. */
@@ -1736,6 +1736,11 @@ function SubmitModModal({ game, recompName, userUid, userName, existingModIds, o
 
     if (existingModIds.has(modId)) {
       setError(`A mod with the folder name "${modId}" already exists for this game. Change the mod id below and resubmit.`);
+      return;
+    }
+
+    if (modId.startsWith('.')) {
+      setError('Mod id cannot start with a "." — change the mod id below and resubmit.');
       return;
     }
 
