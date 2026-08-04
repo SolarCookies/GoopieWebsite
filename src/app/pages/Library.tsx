@@ -177,7 +177,7 @@ export function Library() {
   }, [selectedGame?.recompName]);
 
   const { getValue: getCvarValue, setValue: setCvarValue, reset: resetCvar, buildArgs: buildCvarArgs, buildTypes: buildCvarTypes } =
-    useCvarSettings(selectedGame?.id, selectedGame?.cvars);
+    useCvarSettings(selectedGame?.id, selectedGame?.cvars, selectedGame?.hiddenCvars);
 
   const releasesState = useGameReleases(selectedGame);
   const {

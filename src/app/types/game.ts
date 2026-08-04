@@ -179,6 +179,13 @@ export interface Game {
   cvars?: CVar[];
 
   /**
+   * Cvars sent to the game on launch the same way as `cvars`, but never
+   * exposed in the player-facing Settings panel and never overridable by
+   * the player — always launched with the fixed `value` set here.
+   */
+  hiddenCvars?: HiddenCVar[];
+
+  /**
    * When true, the launcher shows its own Discord Rich Presence
    * ("Playing <title>") while this game runs. Defaults to false because many
    * games set their own Rich Presence, which the launcher's would otherwise
@@ -257,6 +264,20 @@ export interface CVar {
   options?: string[];
   /** Optional description shown to the player. */
   description?: string;
+}
+
+export interface HiddenCVar {
+  /** Stable id (uuid) so list edits don't collide on tag rename. */
+  id: string;
+  /** Lowercase identifier used on the command line (e.g. `numberofcoins`). */
+  tag: string;
+  /**
+   * Variable type. No `Enum` — hidden cvars are never shown to the player,
+   * so there's no picker to give friendly labels to; use `String` instead.
+   */
+  type: Exclude<CVarType, 'Enum'>;
+  /** Fixed value always sent to the game; the player cannot change this. */
+  value: number | boolean | string;
 }
 
 export type ViewMode = 'grid' | 'list';

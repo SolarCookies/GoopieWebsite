@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { CVar } from '../types/game';
+import type { CVar, HiddenCVar } from '../types/game';
 
 export type CVarValue = number | boolean | string;
 
@@ -35,7 +35,7 @@ function coerce(cvar: CVar, raw: CVarValue | undefined): CVarValue {
   return cvar.type === 'Int' ? Math.trunc(n) : n;
 }
 
-function formatArg(cvar: CVar, value: CVarValue): string {
+function formatArg(cvar: { type: CVar['type'] }, value: CVarValue): string {
   if (cvar.type === 'Bool') return Boolean(value) ? 'true' : 'false';
   if (cvar.type === 'Enum' || cvar.type === 'String') return String(value);
   if (cvar.type === 'Int') return String(Math.trunc(Number(value)));
@@ -48,8 +48,9 @@ function formatArg(cvar: CVar, value: CVarValue): string {
  * Persists per-game cvar values in localStorage and exposes helpers to
  * read/update them and to build the launch argument string consumed by CEF.
  */
-export function useCvarSettings(gameId: string | undefined, cvars: CVar[] | undefined) {
+export function useCvarSettings(gameId: string | undefined, cvars: CVar[] | undefined, hiddenCvars?: HiddenCVar[]) {
   const list = useMemo(() => cvars ?? [], [cvars]);
+  const hiddenList = useMemo(() => hiddenCvars ?? [], [hiddenCvars]);
   const [values, setValues] = useState<Record<string, CVarValue>>({});
 
   // Reload whenever the selected game changes.
@@ -89,8 +90,13 @@ export function useCvarSettings(gameId: string | undefined, cvars: CVar[] | unde
       const value = coerce(cvar, values[cvar.id]);
       parts.push(`--${tag}=${formatArg(cvar, value)}`);
     }
+    for (const hidden of hiddenList) {
+      const tag = (hidden.tag || '').trim();
+      if (!tag) continue;
+      parts.push(`--${tag}=${formatArg(hidden, hidden.value)}`);
+    }
     return parts.join(' ');
-  }, [list, values]);
+  }, [list, hiddenList, values]);
 
   /**
    * Maps each emitted cvar's tag to its declared `CVarType`, so the launcher
@@ -105,8 +111,13 @@ export function useCvarSettings(gameId: string | undefined, cvars: CVar[] | unde
       if (!tag) continue;
       types[tag] = cvar.type;
     }
+    for (const hidden of hiddenList) {
+      const tag = (hidden.tag || '').trim();
+      if (!tag) continue;
+      types[tag] = hidden.type;
+    }
     return types;
-  }, [list]);
+  }, [list, hiddenList]);
 
   return { values, getValue, setValue, reset, buildArgs, buildTypes };
 }

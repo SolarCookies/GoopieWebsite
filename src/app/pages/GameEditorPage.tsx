@@ -14,6 +14,7 @@ import { EditorVisibility } from '../components/editor/EditorVisibility';
 import { EditorCommunity } from '../components/editor/EditorCommunity';
 import { EditorLauncherBehavior } from '../components/editor/EditorLauncherBehavior';
 import { EditorCVars } from '../components/editor/EditorCVars';
+import { EditorHiddenCVars } from '../components/editor/EditorHiddenCVars';
 import { EditorGameFiles } from '../components/editor/EditorGameFiles';
 import { EditorAssignedDevs } from '../components/editor/EditorAssignedDevs';
 
@@ -152,6 +153,7 @@ export function GameEditorPage() {
             <EditorCommunity form={form} update={update} readOnly={readOnly} />
             <EditorLauncherBehavior form={form} update={update} readOnly={readOnly} />
             <EditorCVars form={form} update={update} readOnly={readOnly} />
+            <EditorHiddenCVars form={form} update={update} readOnly={readOnly} />
             <EditorGameFiles form={form} update={update} readOnly={readOnly} />
             {!isNew && <EditorAssignedDevs gameId={form.id} />}
           </form>
