@@ -186,7 +186,7 @@ export function AchievementsPanel({ recompName }: AchievementsPanelProps) {
                   {obscured ? 'Hidden Achievement' : a.label}
                 </p>
                 <p className="text-xs break-words" style={{ color: 'var(--theme-text-muted)' }}>
-                  {obscured ? 'Click to reveal' : (a.unlocked ? a.description : a.unachievedDescription)}
+                  {obscured ? 'Click to reveal' : (a.unlocked ? a.description : (a.unachievedDescription || a.description))}
                 </p>
               </div>
 
