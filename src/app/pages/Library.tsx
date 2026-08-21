@@ -24,7 +24,7 @@ import { useNews } from '../data/useNews';
 import { buildReleaseDownloadPrefix, pickDefaultAsset, sortAssetsByRelevance, detectAssetPlatform, isPlatformCompatible, isArchCompatible, findInstalledBuild, useGameReleases } from '../data/useGameReleases';
 import { pickAssetPreservingTuStatus } from '../utils/updateRequired';
 import { isLauncherVersionAtLeast } from '../utils/launcherVersion';
-import { isInLauncher, isInTauriLauncher } from '../utils/externalLink';
+import { isInLauncher, isInTauriLauncher, getCachedImageUrl } from '../utils/externalLink';
 import { GameInfoSidebar } from '../components/GameInfoSidebar';
 import { GameNewsSection } from '../components/GameNewsSection';
 import { DescriptionEditorModal } from '../components/DescriptionEditorModal';
@@ -209,7 +209,8 @@ export function Library() {
 
   const headerImages = useMemo(() => {
     if (!selectedGame) return [];
-    return Array.isArray(selectedGame.headerImage) ? selectedGame.headerImage : [selectedGame.headerImage];
+    const raw = Array.isArray(selectedGame.headerImage) ? selectedGame.headerImage : [selectedGame.headerImage];
+    return raw.map(src => getCachedImageUrl(src) ?? src);
   }, [selectedGame]);
 
   const crossfade = useHeaderCrossfade(selectedGame?.id, headerImages);

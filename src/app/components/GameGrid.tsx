@@ -7,6 +7,7 @@ import { useFavorites } from '../data/useFavorites';
 import type { Game } from '../types/game';
 import type { GameRatingInfo } from '../data/useRatings';
 import { useCoverStyleMap } from '../hooks/useCoverStyle';
+import { getCachedImageUrl } from '../utils/externalLink';
 
 interface GameGridProps {
   games: Game[];
@@ -30,7 +31,7 @@ export function GameGrid({
 }: GameGridProps) {
   const { user } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites(user?.uid);
-  const coverStyles = useCoverStyleMap(games.map(g => g.coverImage));
+  const coverStyles = useCoverStyleMap(games.map(g => getCachedImageUrl(g.coverImage)));
 
   const [dragId, setDragId] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -88,7 +89,7 @@ export function GameGrid({
       {games.map(game => {
         const rating = ratings[game.id];
         const fav = isFavorite(game.id);
-        const wrap = game.coverImage;
+        const wrap = getCachedImageUrl(game.coverImage);
         const coverStyle = wrap ? coverStyles.get(wrap) : undefined;
         const isBeingDragged = dragId === game.id;
         return (

@@ -5,6 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { Checkbox } from './ui/checkbox';
 import type { GameRatingInfo } from '../data/useRatings';
 import { useCoverStyle } from '../hooks/useCoverStyle';
+import { getCachedImageUrl } from '../utils/externalLink';
 
 const statusColors: Record<Game['status'], string> = {
   Featured: 'bg-purple-600 text-white',
@@ -324,7 +325,8 @@ interface GameRowProps {
 }
 
 function GameRow({ game, gameRatings, showDragHandle }: GameRowProps) {
-  const coverStyle = useCoverStyle(game.coverImage);
+  const cachedCover = getCachedImageUrl(game.coverImage);
+  const coverStyle = useCoverStyle(cachedCover);
   return (
     <div className="flex gap-3">
       {showDragHandle && (
@@ -343,7 +345,7 @@ function GameRow({ game, gameRatings, showDragHandle }: GameRowProps) {
         aria-label={game.title}
         style={{
           backgroundColor: '#000',
-          backgroundImage: `url(${game.coverImage})`,
+          backgroundImage: `url(${cachedCover})`,
           backgroundSize: coverStyle.backgroundSize,
           backgroundPosition: coverStyle.backgroundPosition,
           backgroundRepeat: 'no-repeat',

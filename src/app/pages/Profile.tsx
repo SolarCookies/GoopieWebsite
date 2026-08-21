@@ -9,6 +9,7 @@ import { Game } from '../types/game';
 import { useAuth, type Role, type DeveloperRequest, type DeletionRequest } from '../auth/AuthContext';
 import { useGameStore } from '../data/GameStore';
 import { useAchievementStats } from '../data/useAchievementStats';
+import { getCachedImageUrl } from '../utils/externalLink';
 
 const statusColors: Record<Game['status'], string> = {
   Featured: 'bg-purple-600 text-white',
@@ -325,7 +326,7 @@ export function Profile() {
                 <div key={game.id} className="rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ backgroundColor: 'var(--theme-page-bg)' }}>
                   <div className="flex items-center gap-4">
                     {game.coverImage && (
-                      <img src={game.coverImage} alt={game.title} className="w-16 h-16 rounded object-cover" />
+                      <img src={getCachedImageUrl(game.coverImage)} alt={game.title} className="w-16 h-16 rounded object-cover" />
                     )}
                     <div>
                       <span className="font-semibold" style={{ color: 'var(--theme-text-primary)' }}>{game.title}</span>

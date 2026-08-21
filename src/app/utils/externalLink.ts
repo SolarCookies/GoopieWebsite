@@ -66,6 +66,22 @@ export function isOfflineMode(): boolean {
 }
 
 /**
+ * Rewrites a remote game image URL (cover art, header/title images) to one
+ * served through the Tauri launcher's on-disk image cache (`goopieimg://`),
+ * so it keeps rendering when offline after the first successful load. Falls
+ * through to the original URL in the plain web build, the legacy CEF
+ * launcher, or an old Tauri launcher that predates `getCachedImageUrl`.
+ */
+export function getCachedImageUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  const w = window as any;
+  if (isInTauriLauncher() && typeof w.getCachedImageUrl === 'function') {
+    return w.getCachedImageUrl(url);
+  }
+  return url;
+}
+
+/**
  * Open `url` in the system browser when inside a launcher, otherwise open a
  * new tab.  Safe to call from any component without a React hook.
  */

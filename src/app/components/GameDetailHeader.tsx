@@ -3,7 +3,7 @@ import type { Game } from '../types/game';
 import { StarRating } from './StarRating';
 import { GameActionButtons, type GameActionButtonsProps } from './GameActionButtons';
 import { SupportLinks, SocialLinkIcons } from './SocialLinks';
-import { isTauriLinuxLauncher } from '../utils/externalLink';
+import { isTauriLinuxLauncher, getCachedImageUrl } from '../utils/externalLink';
 
 interface CrossfadeSlot {
   src: string;
@@ -82,7 +82,7 @@ export function GameDetailHeader({
         <div className="absolute inset-0" style={{ backgroundColor: 'var(--theme-header-overlay)' }} />
         {game.titleImage && (
           <img
-            src={game.titleImage}
+            src={getCachedImageUrl(game.titleImage)}
             alt={game.title}
             className="absolute top-4 left-4 object-contain drop-shadow-2xl hidden md:block"
             style={{
