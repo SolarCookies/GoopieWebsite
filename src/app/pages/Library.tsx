@@ -34,6 +34,7 @@ import { GameMediaCarousel } from '../components/GameMediaCarousel';
 import { ConfirmCloseGameDialog } from '../components/ConfirmCloseGameDialog';
 import { ConfirmRemoveBuildDialog } from '../components/ConfirmRemoveBuildDialog';
 import { ExtractErrorDialog } from '../components/ExtractErrorDialog';
+import { DownloadErrorDialog } from '../components/DownloadErrorDialog';
 import { GameManageModal } from '../components/GameManageModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Progress } from '../components/ui/progress';
@@ -763,6 +764,11 @@ export function Library() {
       <ExtractErrorDialog
         error={installation.extractError}
         onClose={installation.clearExtractError}
+      />
+
+      <DownloadErrorDialog
+        error={installation.downloadError}
+        onClose={installation.clearDownloadError}
       />
 
       <Dialog open={!!runningGameHook.requiredModsDownload}>

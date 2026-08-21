@@ -25,6 +25,7 @@ export function useGameInstallation({
   const [extractProgress, setExtractProgress] = useState(0);
   const [extractString, setExtractString] = useState('');
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [installedBuilds, setInstalledBuilds] = useState<InstalledBuild[]>([]);
   const [updateInstalled, setUpdateInstalled] = useState(false);
   const [dlcInstalled, setDlcInstalled] = useState(false);
@@ -80,6 +81,10 @@ export function useGameInstallation({
             setInstalledBuilds(builds);
             const matching = findInstalledBuild(builds, selectedTag, selectedAsset);
             setExeUpdated(matching && w.isExeUpdated ? w.isExeUpdated(selectedGame.recompName, matching.name) : false);
+            if (isLauncherVersionAtLeast('1.8.0')) {
+              const err = w.getDownloadError ? w.getDownloadError() : null;
+              if (err) setDownloadError(err);
+            }
           }
           const isExt = w.isExtracting ? w.isExtracting(selectedGame.id) : false;
           setExtracting(isExt);
@@ -148,6 +153,14 @@ export function useGameInstallation({
     }
   }, []);
 
+  const clearDownloadError = useCallback(() => {
+    setDownloadError(null);
+    const w = window as any;
+    if (isLauncherVersionAtLeast('1.8.0') && w.clearDownloadError) {
+      w.clearDownloadError();
+    }
+  }, []);
+
   return {
     isoInstalled,
     exeUpdated,
@@ -159,6 +172,8 @@ export function useGameInstallation({
     extractString,
     extractError,
     clearExtractError,
+    downloadError,
+    clearDownloadError,
     installedBuilds,
     updateInstalled,
     dlcInstalled,
