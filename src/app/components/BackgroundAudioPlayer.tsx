@@ -29,6 +29,24 @@ export function BackgroundAudioPlayer({ videoId, audioKey, volume = 10, muted = 
     } catch { /* ignore */ }
   }, [muted, volume]);
 
+  // Pause playback while the launcher window is collapsed to the tray, and
+  // resume it when restored — a hidden window otherwise keeps the video (and
+  // its audio) running, which also keeps it alive as an MPRIS session.
+  useEffect(() => {
+    const onHidden = () => {
+      try { playerRef.current?.pauseVideo(); } catch { /* ignore */ }
+    };
+    const onShown = () => {
+      try { playerRef.current?.playVideo(); } catch { /* ignore */ }
+    };
+    window.addEventListener('goopie:window-hidden', onHidden);
+    window.addEventListener('goopie:window-shown', onShown);
+    return () => {
+      window.removeEventListener('goopie:window-hidden', onHidden);
+      window.removeEventListener('goopie:window-shown', onShown);
+    };
+  }, []);
+
   useEffect(() => {
     const createPlayer = () => {
       if (!wrapperRef.current) return;
