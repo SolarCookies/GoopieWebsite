@@ -37,7 +37,7 @@ export function EditorGameFiles({ form, update, readOnly }: Props) {
             <Input value={form.xexVersion || ''} onChange={e => update('xexVersion', e.target.value || undefined)} placeholder="e.g. World, USA, PAL" style={inputStyle} disabled={readOnly} />
           </div>
         </div>
-        <p className="text-xs mt-1" style={{ color: 'var(--theme-text-muted)' }}>Identifies the exact XEX revision the recomp expects.</p>
+        <p className="text-xs mt-1" style={{ color: 'var(--theme-text-muted)' }}>Identifies the exact XEX revision the recomp expects. Comma-separate values to allow multiple valid revisions (e.g. different regions/versions).</p>
       </div>
 
       {/* GitHub Release */}

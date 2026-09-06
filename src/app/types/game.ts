@@ -4,7 +4,8 @@ export interface Game {
   id: string;
   title: string;
   recompName: string;
-  /** SHA-256 hash of the original XEX the recomp targets. */
+  /** SHA-256 hash(es) of the original XEX(es) the recomp targets. Comma-separate
+   *  values to allow multiple valid revisions (e.g. different regions/versions). */
   xexSha256?: string;
   /** Region/version of the XEX (e.g. "World", "USA", "PAL"). */
   xexVersion?: string;
