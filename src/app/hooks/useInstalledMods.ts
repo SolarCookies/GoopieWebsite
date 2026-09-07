@@ -29,7 +29,7 @@ export interface InstallResult {
 
 export interface ModIssue {
   id: string;
-  kind: 'error' | 'warning';
+  kind: 'error' | 'warning' | 'approval_required';
   message: string;
 }
 

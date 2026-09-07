@@ -49,7 +49,7 @@ import { getGitHubRepo, fetchReleases, type GameRelease } from '../data/useGameR
 const PLATFORM_PREFIXES: { prefix: string; platform: Platform }[] = [
   { prefix: 'windows', platform: 'Windows' },
   { prefix: 'linux', platform: 'Linux' },
-  { prefix: 'macos', platform: 'Mac' },
+  { prefix: 'mac', platform: 'Mac' },
 ];
 
 function PlatformBadges({ platform, isCode }: { platform: string[] | undefined; isCode: boolean | undefined }) {
@@ -491,6 +491,7 @@ export function GameMods() {
 
   const errors = validation?.issues.filter(i => i.kind === 'error') ?? [];
   const warnings = validation?.issues.filter(i => i.kind === 'warning') ?? [];
+  const approvalRequired = validation?.issues.filter(i => i.kind === 'approval_required') ?? [];
   const hasEnabledCodeMod = (installedMods ?? []).some(m => m.enabled && m.is_code);
 
   return (
@@ -531,6 +532,15 @@ export function GameMods() {
               <div className="flex items-center gap-2 p-2.5 rounded-lg text-xs border shrink-0" style={{ backgroundColor: 'rgba(251,146,60,0.1)', borderColor: 'rgba(251,146,60,0.4)', color: '#fdba74' }}>
                 <ShieldAlert className="w-4 h-4 shrink-0" />
                 <span>Mods can run arbitrary code on your PC. Only install mods from people you trust.</span>
+              </div>
+            )}
+            {approvalRequired.length > 0 && (
+              <div className="p-3 rounded-lg text-xs border shrink-0 space-y-2" style={{ backgroundColor: 'rgba(251,146,60,0.1)', borderColor: 'rgba(251,146,60,0.4)', color: '#fdba74' }}>
+                {approvalRequired.map(issue => <p key={issue.id}>{issue.message}</p>)}
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => (window as any).openMacModApprovalSettings?.()}>Open Privacy &amp; Security</Button>
+                  <Button size="sm" variant="outline" onClick={installedHook.fetchMods}>Retry</Button>
+                </div>
               </div>
             )}
             {errors.length > 0 && (
