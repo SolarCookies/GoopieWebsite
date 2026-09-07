@@ -92,6 +92,9 @@ export interface Game {
    */
   preferredAssetSuffix?: string;
 
+  /** Expected CFBundleIdentifier for signed macOS app releases. */
+  macBundleIdentifier?: string;
+
   /**
    * Optional external launcher URL for games that use their own proprietary launcher.
    * When set, a link button is shown on the game page so users can get the game externally.

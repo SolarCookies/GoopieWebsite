@@ -7,6 +7,8 @@ export interface ReleaseAsset {
   name: string;
   url: string; // browser_download_url
   size?: number;
+  /** GitHub's `sha256:<hex>` release-asset digest. Required for DMGs. */
+  digest?: string;
 }
 
 export interface GameRelease {
@@ -20,6 +22,8 @@ export interface GameRelease {
 export interface InstalledInfo {
   version?: string;
   asset?: string;
+  kind?: 'macos-app' | string;
+  appPath?: string;
   exePath?: string;
   /** Platform of the installed build's main executable, detected from its
    *  binary header by the launcher ("Windows" | "Linux" | "macOS"), or
@@ -320,6 +324,7 @@ export async function fetchReleases(repo: string, force = false): Promise<GameRe
                 name: String(a.name ?? ''),
                 url: String(a.browser_download_url ?? ''),
                 size: typeof a.size === 'number' ? a.size : undefined,
+                digest: typeof a.digest === 'string' ? a.digest : undefined,
               }))
           : [],
       }))
@@ -529,7 +534,12 @@ export function useGameReleases(game: Game | undefined) {
   const filterIncompatible = !!platform && isLauncherVersionAtLeast('1.3.0');
   const compatibleAssets = useMemo(() => {
     if (!filterIncompatible || showIncompatible) return sortedAssets;
-    return sortedAssets.filter(a => isPlatformCompatible(detectAssetPlatform(a.name), platform, protonReady));
+    const capabilities = isLauncherVersionAtLeast('1.9.0') && typeof (window as any).getLauncherCapabilities === 'function'
+      ? (window as any).getLauncherCapabilities() : null;
+    return sortedAssets.filter(a => {
+      if (a.name.toLowerCase().endsWith('.dmg') && !capabilities?.macosAppInstall) return false;
+      return isPlatformCompatible(detectAssetPlatform(a.name), platform, protonReady);
+    });
   }, [sortedAssets, filterIncompatible, showIncompatible, platform, protonReady]);
 
   // True when every available asset was filtered out as incompatible (and the

@@ -17,6 +17,8 @@ const LINUX_APPIMAGE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-x86_64.AppImag
 const LINUX_PORTABLE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-x86_64`;
 const LINUX_ARM64_APPIMAGE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-aarch64.AppImage`;
 const LINUX_ARM64_PORTABLE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-aarch64`;
+const MACOS_ARM64_URL = `${RELEASE_BASE}/Goopie-Launcher-macos-arm64.dmg`;
+const MACOS_X64_URL = `${RELEASE_BASE}/Goopie-Launcher-macos-x64.dmg`;
 
 function DownloadButton({ url, label }: { url: string; label: string }) {
   return (
@@ -139,12 +141,10 @@ export function Downloads() {
               >
                 macOS
               </h2>
-              <p
-                className="text-sm"
-                style={{ color: 'var(--theme-text-secondary)' }}
-              >
-                Coming soon.
-              </p>
+              <div className="flex flex-wrap gap-3">
+                <DownloadButton url={MACOS_ARM64_URL} label="Apple Silicon" />
+                <DownloadButton url={MACOS_X64_URL} label="Intel" />
+              </div>
             </div>
           </div>
 

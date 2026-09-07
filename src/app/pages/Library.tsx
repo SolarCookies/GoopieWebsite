@@ -346,14 +346,17 @@ export function Library() {
           asset = targetSorted[0].name;
         }
         if (!asset) asset = pickDefaultAsset(selectedGame, targetSorted);
+        const selectedReleaseAsset = target.assets.find(a => a.name === (asset ?? selectedAsset));
         return {
           tag: target.tag,
           prefix: buildReleaseDownloadPrefix(githubRepo, target.tag),
           asset: asset ?? selectedAsset,
+          digest: selectedReleaseAsset?.digest,
         };
       }
     }
-    return { tag: selectedTag, prefix: releaseDownloadPrefix, asset: selectedAsset };
+    const selectedReleaseAsset = allReleases.find(r => r.tag === selectedTag)?.assets.find(a => a.name === selectedAsset);
+    return { tag: selectedTag, prefix: releaseDownloadPrefix, asset: selectedAsset, digest: selectedReleaseAsset?.digest };
   }, [newerReleaseAvailable, githubRepo, allReleases, selectedBuild, selectedGame, selectedTag, releaseDownloadPrefix, selectedAsset, launcherPlatform, launcherArch]);
 
   const triggerUpdate = useCallback(() => {
@@ -365,6 +368,9 @@ export function Library() {
       updateInfo.prefix ?? '',
       updateInfo.asset ?? '',
       updateInfo.tag ?? '',
+      undefined,
+      updateInfo.digest ?? '',
+      selectedGame.macBundleIdentifier ?? '',
     );
     if (newerReleaseAvailable && updateInfo.tag) {
       setSelectedTag(updateInfo.tag);
