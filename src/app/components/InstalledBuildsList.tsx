@@ -41,7 +41,7 @@ export function InstalledBuildsList({
       <div
         className={compact
           ? 'flex flex-col gap-2'
-          : 'absolute left-0 top-full z-30 mt-2 flex flex-col gap-2 p-2 rounded-lg shadow-xl min-w-full w-max max-w-md'}
+          : 'absolute left-0 top-full z-30 mt-2 flex flex-col gap-2 p-2 rounded-lg shadow-xl min-w-full w-max max-w-md backdrop-blur-md'}
         style={compact ? undefined : { backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-border)' }}
       >
       {builds.map(build => {

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { isTauriLinuxLauncher } from '../utils/externalLink';
 
 export type ThemeName =
   | 'steam'
@@ -396,6 +397,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const colors = themes[theme] ?? themes.steam;
     const root = document.documentElement;
+    // WebKitGTK parses backdrop-filter but never renders it; see theme.css.
+    root.classList.toggle('no-backdrop-blur', isTauriLinuxLauncher());
     root.style.setProperty('--background', colors.pageBg);
     root.style.setProperty('--theme-page-bg', colors.pageBg);
     root.style.setProperty('--theme-sidebar-bg', colors.sidebarBg);

@@ -119,6 +119,19 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* The Linux launcher's WebKitGTK webview accepts backdrop-filter but never
+   renders it, so the frosted dialog/popover/select/sheet surfaces (which sit
+   on the transparent page background) would just be see-through. Give them
+   the theme's section overlay layered over the (always opaque) tag color, which
+   makes a fully opaque surface in the theme's tint. !important so it also wins
+   over inline `backgroundColor` styles (e.g. the version picker popover). */
+.no-backdrop-blur .backdrop-blur-md {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background-color: var(--theme-tag-bg) !important;
+  background-image: linear-gradient(var(--theme-section-overlay), var(--theme-section-overlay)) !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
