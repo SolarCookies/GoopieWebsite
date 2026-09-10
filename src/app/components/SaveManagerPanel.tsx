@@ -24,9 +24,25 @@ interface SaveManagerPanelProps {
 interface CloudSaveStatus {
   enabled: boolean;
   signedIn: boolean;
+  /** When save data last actually changed hands. */
   lastSyncedAt: number;
+  /** When a sync last completed, including no-op ones. May be absent on
+   *  launchers older than the build that split it out of `lastSyncedAt`. */
+  lastCheckedAt?: number;
   syncing: boolean;
   error: string | null;
+}
+
+/// The cloud-sync status line. Reports the last successful *check* alongside
+/// the last actual transfer: a save that hasn't changed in a week is still
+/// being synced every session, and showing only the transfer time made that
+/// read as "sync has been broken for a week".
+function describeCloudStatus(status: CloudSaveStatus): string {
+  if (status.syncing) return 'Syncing…';
+  if (status.error) return `Sync error: ${status.error}`;
+  if (!status.lastSyncedAt) return 'No save backed up yet';
+  const checked = status.lastCheckedAt || status.lastSyncedAt;
+  return `Save from ${formatRelativeTime(status.lastSyncedAt)} · checked ${formatRelativeTime(checked)}`;
 }
 
 /// Coarse "5 minutes ago" / "3 hours ago" style formatting for the cloud-sync
@@ -271,11 +287,7 @@ export function SaveManagerPanel({ recompName }: SaveManagerPanelProps) {
                 <p className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>Cloud Saves</p>
                 <p className="text-xs truncate" style={{ color: 'var(--theme-text-muted)' }}>
                   {cloudStatus?.enabled
-                    ? cloudStatus.syncing
-                      ? 'Syncing…'
-                      : cloudStatus.error
-                        ? `Sync error: ${cloudStatus.error}`
-                        : `Last synced ${formatRelativeTime(cloudStatus.lastSyncedAt)}`
+                    ? describeCloudStatus(cloudStatus)
                     : 'Automatically back up your save to Google Drive'}
                 </p>
               </div>
