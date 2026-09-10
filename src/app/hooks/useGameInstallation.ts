@@ -137,6 +137,17 @@ export function useGameInstallation({
     setExtractString('');
   }, [selectedGame]);
 
+  // Pick a folder that's already been extracted instead of an ISO/package —
+  // the launcher symlinks it in rather than copying, so it stays where it is.
+  const handleInstallFolder = useCallback(() => {
+    if (!selectedGame || selectedGame.noAssetExtraction) return;
+    if (!isLauncherVersionAtLeast('1.9.0')) return;
+    (window as any).InstallFolder(selectedGame.recompName, selectedGame.xexSha256 || '');
+    setExtracting(true);
+    setExtractProgress(0);
+    setExtractString('');
+  }, [selectedGame]);
+
   const setUpdatingState = useCallback((value: boolean) => {
     setUpdating(value);
     if (value) {
@@ -179,6 +190,7 @@ export function useGameInstallation({
     dlcInstalled,
     checkState,
     handleInstallIso,
+    handleInstallFolder,
     setUpdating: setUpdatingState,
   };
 }

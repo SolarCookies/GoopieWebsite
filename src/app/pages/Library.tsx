@@ -583,6 +583,7 @@ export function Library() {
     runningBuildForSelectedGame: runningGameHook.runningBuildForSelectedGame,
     noSupportedBuildsNotice,
     onInstallIso: installation.handleInstallIso,
+    onInstallFolder: installation.handleInstallFolder,
     onTriggerUpdate: triggerUpdate,
     onRequestPlay: runningGameHook.requestPlay,
     onCloseRunningGame: runningGameHook.closeRunningGame,

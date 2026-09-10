@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Play, FolderOpen, Trash2, Download, RefreshCw, ExternalLink, X, Settings2, RotateCcw, Package } from 'lucide-react';
+import { Play, FolderOpen, Trash2, Download, RefreshCw, ExternalLink, X, Settings2, RotateCcw, Package, Disc } from 'lucide-react';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -54,6 +54,8 @@ export interface GameActionButtonsProps {
 
   // Actions
   onInstallIso: () => void;
+  /** Pick an already-extracted assets folder instead of an ISO/package. */
+  onInstallFolder?: () => void;
   onTriggerUpdate: () => void;
   onRequestPlay: (build: InstalledBuild) => void;
   onCloseRunningGame: () => void;
@@ -114,6 +116,7 @@ export function GameActionButtons({
   runningBuildForSelectedGame,
   noSupportedBuildsNotice,
   onInstallIso,
+  onInstallFolder,
   onTriggerUpdate,
   onRequestPlay,
   onCloseRunningGame,
@@ -351,12 +354,23 @@ export function GameActionButtons({
           </div>
         )
       ) : (
-        <Button
-          className={`bg-[#da5d09] hover:bg-[#f18339] text-white ${btnPx}`}
-          onClick={onInstallIso}
-        >
-          <FolderOpen className={`${iconSize} ${iconMr}`} /> Select Game
-        </Button>
+        <div className={`flex flex-wrap gap-${compact ? '2' : '3'}`}>
+          <Button
+            className={`bg-[#da5d09] hover:bg-[#f18339] text-white ${btnPx}`}
+            onClick={onInstallIso}
+          >
+            <Disc className={`${iconSize} ${iconMr}`} /> {game.isXBLA ? 'Select Package' : 'Select ISO'}
+          </Button>
+          {/* Linking an already-extracted folder needs launcher-side support. */}
+          {onInstallFolder && isLauncherVersionAtLeast('1.9.0') && (
+            <Button
+              className={`bg-[#da5d09] hover:bg-[#f18339] text-white ${btnPx}`}
+              onClick={onInstallFolder}
+            >
+              <FolderOpen className={`${iconSize} ${iconMr}`} /> Select Folder
+            </Button>
+          )}
+        </div>
       )}
       {isoInstalled && !extracting && !updating && (
         <div className="mt-3">
