@@ -55,6 +55,7 @@ export function GameEditorPage() {
   });
 
   const [recompNameError, setRecompNameError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   const update = <K extends keyof Game>(key: K, value: Game[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -71,11 +72,23 @@ export function GameEditorPage() {
       return;
     }
     setRecompNameError('');
-    // assignedDevelopers is managed out-of-band by assignGame/unassignGame
-    // (see EditorAssignedDevs), not by this form — always write the latest
-    // Firestore value instead of the stale snapshot captured when the form
-    // was opened, so assigning a dev then saving unrelated edits can't wipe it.
-    await saveGame({ ...form, assignedDevelopers: existingGame?.assignedDevelopers });
+    setSaveError('');
+    try {
+      // assignedDevelopers is managed out-of-band by assignGame/unassignGame
+      // (see EditorAssignedDevs), not by this form — always write the latest
+      // Firestore value instead of the stale snapshot captured when the form
+      // was opened, so assigning a dev then saving unrelated edits can't wipe it.
+      await saveGame({ ...form, assignedDevelopers: existingGame?.assignedDevelopers });
+    } catch (err: any) {
+      // Without this the write silently does nothing: the navigate below never
+      // runs and the editor just sits there looking unsaved.
+      setSaveError(
+        err?.code === 'permission-denied'
+          ? "You don't have permission to save this game. If you're an assigned developer, note that visibility can only be changed by an admin."
+          : 'Failed to save the game. Please try again.',
+      );
+      return;
+    }
     if (isNew && user?.role === 'developer') {
       await assignGame(user.uid, form.id);
     }
@@ -143,6 +156,11 @@ export function GameEditorPage() {
         {/* Scrollable form body */}
         <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
           <form id="game-editor-form" onSubmit={handleSubmit} className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+            {saveError && (
+              <p className="text-red-500 text-sm rounded border border-red-500/40 bg-red-500/10 px-3 py-2">
+                {saveError}
+              </p>
+            )}
             <EditorBasicInfo
               form={form}
               update={update}
