@@ -16,6 +16,13 @@ service cloud.firestore {
         && gameId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedGames;
     }
 
+    // Helper: a game's effective visibility. A missing `isPublic` counts as
+    // public, matching the client (see `GameStore.tsx` and `GameDetailHeader`,
+    // which both treat only an explicit `false` as private).
+    function visibility(game) {
+      return 'isPublic' in game ? game.isPublic == true : true;
+    }
+
     // Users collection — each doc ID is the Firebase Auth UID
     match /users/{userId} {
       // Anyone authenticated can read their own profile
@@ -54,9 +61,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'developer'
         && request.resource.data.isPublic == false;
 
-      // Developers assigned to this game can update it (but cannot set isPublic to true)
+      // Developers assigned to this game can update it, but cannot change its
+      // visibility — only an admin may publish or unpublish. Note this compares
+      // the stored flag with the submitted one rather than just rejecting
+      // `isPublic == true`: `saveGame()` rewrites the whole document, so every
+      // developer save re-submits the current visibility, and a plain
+      // `isPublic != true` check would lock the assigned developer out of their
+      // own game the moment an admin approved it.
       allow update: if isDeveloperFor(gameId)
-        && request.resource.data.isPublic != true;
+        && visibility(request.resource.data) == visibility(resource.data);
 
       // Developers assigned to this game can delete it
       allow delete: if isDeveloperFor(gameId);
