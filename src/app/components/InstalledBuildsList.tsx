@@ -24,7 +24,7 @@ export function InstalledBuildsList({
   const [open, setOpen] = useState(false);
   if (builds.length === 0) return null;
   return (
-    <div className="mt-3 flex flex-col gap-2">
+    <div className="mt-3 relative flex flex-col gap-2">
       <button
         type="button"
         className={`flex items-center gap-1 font-semibold uppercase tracking-wide ${compact ? 'text-[10px]' : 'text-xs'}`}
@@ -34,7 +34,17 @@ export function InstalledBuildsList({
         <ChevronDown className={`transition-transform ${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${open ? '' : '-rotate-90'}`} />
         Installed builds ({builds.length})
       </button>
-      {open && builds.map(build => {
+      {/* Desktop: the header overlay is bottom-anchored, so an in-flow list would grow
+          upwards over the title. Drop the rows down as an overlay instead, hanging off
+          the toggle and covering the page content below the header until collapsed. */}
+      {open && (
+      <div
+        className={compact
+          ? 'flex flex-col gap-2'
+          : 'absolute left-0 top-full z-30 mt-2 flex flex-col gap-2 p-2 rounded-lg shadow-xl min-w-full w-max max-w-md'}
+        style={compact ? undefined : { backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-border)' }}
+      >
+      {builds.map(build => {
         const isRunning = !!runningBuild && build.name === runningBuild;
         return (
         <div
@@ -97,6 +107,8 @@ export function InstalledBuildsList({
         </div>
         );
       })}
+      </div>
+      )}
     </div>
   );
 }

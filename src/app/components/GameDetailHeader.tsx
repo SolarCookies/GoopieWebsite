@@ -63,7 +63,9 @@ export function GameDetailHeader({
   return (
     <>
       {/* Header Image */}
-      <div className="relative h-[200px] md:h-[500px] overflow-hidden z-10 ">
+      {/* z-20 + no overflow clipping on desktop so the installed builds dropdown in
+          the overlay can hang below the header, over the page content. */}
+      <div className="relative h-[200px] md:h-[500px] overflow-hidden md:overflow-visible z-20">
         {([{ id: 'A', slot: slotA }, { id: 'B', slot: slotB }] as const).map(({ id, slot }) => (
           slot.src ? (
           <img
