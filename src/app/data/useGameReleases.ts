@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Game } from '../types/game';
 import { isLauncherVersionAtLeast } from '../utils/launcherVersion';
+import { isInLauncher } from '../utils/externalLink';
 import { pickAssetPreservingTuStatus, pickAssetByDefaultBuildPreference } from '../utils/updateRequired';
 
 export interface ReleaseAsset {
@@ -397,20 +398,84 @@ function saveSelection(gameId: string, sel: PersistedSelection) {
   } catch { /* ignore quota errors */ }
 }
 
+/** How often to re-attempt a bridge read that came back empty, and for how long. */
+const BRIDGE_RETRY_MS = 500;
+const BRIDGE_RETRY_LIMIT = 20; // ~10s
+
+/**
+ * Read a non-empty string from a synchronous launcher bridge global, or
+ * `undefined` when it isn't available *right now*.
+ *
+ * The shim (`bridge/shim.js`) defines every bridge global before any page
+ * script runs, so a `typeof === 'function'` check says nothing about whether
+ * the Rust side is reachable — the call returns `null` for any failure,
+ * including the startup window where the webview is up but the bridge server
+ * isn't answering yet. Callers must therefore treat `undefined` as "not known
+ * yet" and retry, never as "not in the launcher".
+ */
+function readBridgeString(fn: string): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const f = (window as any)[fn];
+  if (typeof f !== 'function') return undefined;
+  try {
+    const v = f();
+    return typeof v === 'string' && v !== '' ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+interface LauncherEnv {
+  platform: string | undefined;
+  arch: string | undefined;
+}
+
+/**
+ * The host platform/architecture as reported by the launcher, retried until
+ * the bridge answers.
+ *
+ * These used to be `useMemo(..., [])`, which permanently baked in whatever the
+ * very first render saw. When the bridge wasn't up yet that meant `platform`
+ * stayed `undefined` for the whole session, and `effectiveAsset` silently fell
+ * through to the browser fallback (`pickDefaultAsset`, which prefers `.exe`) —
+ * so on Linux/macOS the selected asset stopped matching any installed build
+ * and the action button read "Install" for a game that was already installed.
+ */
+function useLauncherEnv(): LauncherEnv {
+  const [env, setEnv] = useState<LauncherEnv>(() => ({
+    platform: readBridgeString('GetPlatform'),
+    arch: readBridgeString('GetArch'),
+  }));
+
+  useEffect(() => {
+    if (env.platform && env.arch) return;
+    // Plain web build: there is no bridge to wait for.
+    if (typeof window === 'undefined' || !isInLauncher()) return;
+    let attempts = 0;
+    const id = setInterval(() => {
+      const next: LauncherEnv = {
+        platform: readBridgeString('GetPlatform'),
+        arch: readBridgeString('GetArch'),
+      };
+      // Bail out on an identical result so React skips the re-render and this
+      // effect doesn't restart (which would reset `attempts` and loop forever
+      // whenever one of the two values never resolves).
+      setEnv(prev => (prev.platform === next.platform && prev.arch === next.arch ? prev : next));
+      if ((next.platform && next.arch) || ++attempts >= BRIDGE_RETRY_LIMIT) clearInterval(id);
+    }, BRIDGE_RETRY_MS);
+    return () => clearInterval(id);
+  }, [env.platform, env.arch]);
+
+  return env;
+}
+
 /**
  * Hook that fetches the releases for a game and exposes the user's
  * version/build selection plus a "show nightlies" toggle.
  */
 export function useGameReleases(game: Game | undefined) {
   const repo = useMemo(() => (game ? getGitHubRepo(game) : null), [game]);
-  const platform = useMemo<string | undefined>(() => {
-    if (typeof window === 'undefined') return undefined;
-    return (window as any).GetPlatform?.() as string | undefined;
-  }, []);
-  const arch = useMemo<string | undefined>(() => {
-    if (typeof window === 'undefined') return undefined;
-    return (window as any).GetArch?.() as string | undefined;
-  }, []);
+  const { platform, arch } = useLauncherEnv();
   // True when all conditions for Proton-mediated Windows compatibility hold:
   // Linux host, launcher 1.3.0+, user has Proton enabled, and at least one
   // Proton installation was detected. When true, Windows builds are treated
