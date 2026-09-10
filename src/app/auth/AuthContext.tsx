@@ -262,13 +262,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setUserRole = async (uid: string, role: Role): Promise<string> => {
     if (!user || user.role !== 'admin') return 'Permission denied';
     try {
-      const updates: Record<string, any> = { role };
-      if (role !== 'developer') updates.assignedGames = [];
-      await updateDoc(doc(db, 'users', uid), updates);
+      // Only the role changes here. `assignedGames` is deliberately left
+      // intact for non-developer roles: it grants nothing on its own (every
+      // check — `canEditGame`, `getVisibleGames`, `isDeveloperFor` in
+      // firestore.rules — also requires role == 'developer'), and clearing it
+      // silently destroyed assignments that couldn't be recovered. Promoting a
+      // developer to admin and back, or a momentary mis-click, used to drop
+      // every game they were assigned to while leaving `assignedDevelopers` on
+      // the game docs pointing at them. Use unassignGame() to actually revoke.
+      await updateDoc(doc(db, 'users', uid), { role });
 
       // If changing own role, update local state
       if (uid === user.uid) {
-        setUser(prev => prev ? { ...prev, role, assignedGames: role !== 'developer' ? [] : prev.assignedGames } : null);
+        setUser(prev => prev ? { ...prev, role } : null);
       }
       return 'ok';
     } catch {
