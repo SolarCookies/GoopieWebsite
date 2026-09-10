@@ -71,7 +71,11 @@ export function GameEditorPage() {
       return;
     }
     setRecompNameError('');
-    await saveGame(form);
+    // assignedDevelopers is managed out-of-band by assignGame/unassignGame
+    // (see EditorAssignedDevs), not by this form — always write the latest
+    // Firestore value instead of the stale snapshot captured when the form
+    // was opened, so assigning a dev then saving unrelated edits can't wipe it.
+    await saveGame({ ...form, assignedDevelopers: existingGame?.assignedDevelopers });
     if (isNew && user?.role === 'developer') {
       await assignGame(user.uid, form.id);
     }
@@ -155,7 +159,9 @@ export function GameEditorPage() {
             <EditorCVars form={form} update={update} readOnly={readOnly} />
             <EditorHiddenCVars form={form} update={update} readOnly={readOnly} />
             <EditorGameFiles form={form} update={update} readOnly={readOnly} />
-            {!isNew && <EditorAssignedDevs gameId={form.id} />}
+            {!isNew && existingGame && (
+              <EditorAssignedDevs gameId={existingGame.id} assignedDevelopers={existingGame.assignedDevelopers} />
+            )}
           </form>
         </div>
       </div>

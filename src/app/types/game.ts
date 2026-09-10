@@ -11,6 +11,13 @@ export interface Game {
   xexVersion?: string;
   og_developer: string;
   recompiled_developers: string[];
+  /**
+   * User accounts linked as developers of this game (denormalized from each
+   * user's `assignedGames`, kept in sync by `assignGame`/`unassignGame` in
+   * AuthContext). Lets the public game page and editor show who's assigned
+   * without granting everyone permission to list the `users` collection.
+   */
+  assignedDevelopers?: { uid: string; username: string; picture?: string }[];
   Tags: string[];
   platforms?: Platform[];
   status: 'Featured' | 'Enhanced' | 'Playable' | 'Gameplay' | 'Loads' | 'Unplayable' | 'Unknown';

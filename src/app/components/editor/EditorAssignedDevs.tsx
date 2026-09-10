@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, UserCheck, Loader2 } from 'lucide-react';
+import type { Game } from '../../types/game';
 import { useAuth } from '../../auth/AuthContext';
-import { useGameDevelopers } from '../../data/useGameDevelopers';
 import { EditorSection } from './EditorSection';
 
 interface Props {
   gameId: string;
+  assignedDevelopers: Game['assignedDevelopers'];
 }
 
-export function EditorAssignedDevs({ gameId }: Props) {
+export function EditorAssignedDevs({ gameId, assignedDevelopers }: Props) {
   const { user, getAllUsers, assignGame, unassignGame } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const assignedDevs = useGameDevelopers(gameId);
+  const assignedDevs = assignedDevelopers ?? [];
 
   const [allDevUsers, setAllDevUsers] = useState<{ uid: string; username: string; picture?: string }[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);

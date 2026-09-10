@@ -290,6 +290,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!existing.includes(gameId)) {
         await updateDoc(userRef, { assignedGames: [...existing, gameId] });
       }
+      await syncAssignedDeveloperOnGame(gameId, {
+        uid,
+        username: data.username as string,
+        ...(data.picture ? { picture: data.picture as string } : {}),
+      });
       return 'ok';
     } catch {
       return 'Failed to assign game';
@@ -304,10 +309,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!snap.exists()) return 'User not found';
       const data = snap.data();
       await updateDoc(userRef, { assignedGames: (data.assignedGames || []).filter((id: string) => id !== gameId) });
+      await removeAssignedDeveloperFromGame(gameId, uid);
       return 'ok';
     } catch {
       return 'Failed to unassign game';
     }
+  };
+
+  // Keeps `games/{gameId}.assignedDevelopers` in sync with a user's
+  // `assignedGames` so the public game page and editor can show assigned
+  // developers without needing to `list` the `users` collection (which is
+  // admin-only, per firestore.rules).
+  const syncAssignedDeveloperOnGame = async (
+    gameId: string,
+    dev: { uid: string; username: string; picture?: string },
+  ) => {
+    const gameRef = doc(db, 'games', gameId);
+    const gameSnap = await getDoc(gameRef);
+    if (!gameSnap.exists()) return;
+    const existing: { uid: string; username: string; picture?: string }[] = gameSnap.data().assignedDevelopers || [];
+    const next = [...existing.filter(d => d.uid !== dev.uid), dev];
+    await updateDoc(gameRef, { assignedDevelopers: next });
+  };
+
+  const removeAssignedDeveloperFromGame = async (gameId: string, uid: string) => {
+    const gameRef = doc(db, 'games', gameId);
+    const gameSnap = await getDoc(gameRef);
+    if (!gameSnap.exists()) return;
+    const existing: { uid: string; username: string; picture?: string }[] = gameSnap.data().assignedDevelopers || [];
+    await updateDoc(gameRef, { assignedDevelopers: existing.filter(d => d.uid !== uid) });
   };
 
   const getAllUsers = async () => {

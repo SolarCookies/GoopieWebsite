@@ -1,6 +1,5 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import type { Game } from '../types/game';
-import { useGameDevelopers } from '../data/useGameDevelopers';
 import type { GamePlaytime } from '../data/usePlaytime';
 
 /** Formats whole seconds as a compact human-readable duration, e.g. "3h 5m". */
@@ -44,7 +43,7 @@ export function GameInfoSidebar({
   game: Game;
   playtime?: GamePlaytime | null;
 }) {
-  const assignedDevs = useGameDevelopers(game.id);
+  const assignedDevs = game.assignedDevelopers ?? [];
 
   return (
     <div className="space-y-6">
