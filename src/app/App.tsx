@@ -10,6 +10,7 @@ import { BackgroundAccentProvider } from './theme/BackgroundAccentContext';
 import { ThemeBackground } from './components/ThemeBackground';
 import { FpsCounter } from './components/FpsCounter';
 import { FileDropManager } from './components/FileDropManager';
+import { Toaster } from './components/ui/sonner';
 
 // Persist the current route on every navigation so the app can reopen on the
 // last-viewed page next launch (see RootRoute in routes.tsx). Subscribes to
@@ -48,6 +49,7 @@ export default function App() {
                 <RouterProvider router={router} />
                 <FpsCounter />
                 <FileDropManager />
+                <Toaster />
               </FocusedGameProvider>
             </LauncherUpdateProvider>
           </GameStoreProvider>

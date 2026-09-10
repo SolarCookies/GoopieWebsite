@@ -18,6 +18,7 @@ import { useXMBAccentVars } from '../hooks/useXMBAccentVars';
 import { useHeaderCrossfade } from '../hooks/useHeaderCrossfade';
 import { useGameInstallation } from '../hooks/useGameInstallation';
 import { useRunningGame } from '../hooks/useRunningGame';
+import { useCloudSaveToasts } from '../hooks/useCloudSaveToasts';
 import { BackgroundAudioPlayer } from '../components/BackgroundAudioPlayer';
 import { Markdown } from '../components/Markdown';
 import { useNews } from '../data/useNews';
@@ -176,6 +177,11 @@ export function Library() {
       w.syncCloudSaveOnOpen(recompName);
     }
   }, [selectedGame?.recompName]);
+
+  // Announce syncs that actually transfer save data (either direction) while
+  // this game's page is open — covers both the pull above and the push that
+  // fires when the game exits back to the launcher.
+  useCloudSaveToasts(selectedGame?.recompName);
 
   const { getValue: getCvarValue, setValue: setCvarValue, reset: resetCvar, buildArgs: buildCvarArgs, buildTypes: buildCvarTypes } =
     useCvarSettings(selectedGame?.id, selectedGame?.cvars, selectedGame?.hiddenCvars);
