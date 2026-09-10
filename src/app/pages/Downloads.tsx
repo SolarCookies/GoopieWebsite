@@ -14,11 +14,16 @@ const WINDOWS_MSI_URL = `${RELEASE_BASE}/Goopie-Launcher-windows-x86_64.msi`;
 const WINDOWS_EXE_URL = `${RELEASE_BASE}/Goopie-Launcher-windows-x86_64.exe`;
 const WINDOWS_SETUP_EXE_URL = `${RELEASE_BASE}/Goopie-Launcher-windows-x86_64-setup.exe`;
 const LINUX_APPIMAGE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-x86_64.AppImage`;
+// The Flatpak is served from a self-hosted remote rather than Flathub.
+// Installing the .flatpakref adds that remote, so `flatpak update` keeps
+// working — the standalone bundles below never update themselves.
+const FLATPAK_REF_URL =
+  'https://birabittoh.github.io/GoopieLauncher/xyz.goopie.launcher.flatpakref';
+const LINUX_FLATPAK_BUNDLE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-x86_64.flatpak`;
+const LINUX_ARM64_FLATPAK_BUNDLE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-aarch64.flatpak`;
 const LINUX_PORTABLE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-x86_64`;
 const LINUX_ARM64_APPIMAGE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-aarch64.AppImage`;
 const LINUX_ARM64_PORTABLE_URL = `${RELEASE_BASE}/Goopie-Launcher-linux-aarch64`;
-const MACOS_ARM64_URL = `${RELEASE_BASE}/Goopie-Launcher-macos-arm64.dmg`;
-const MACOS_X64_URL = `${RELEASE_BASE}/Goopie-Launcher-macos-x64.dmg`;
 
 function DownloadButton({ url, label }: { url: string; label: string }) {
   return (
@@ -121,31 +126,21 @@ export function Downloads() {
                 Linux
               </h2>
               <div className="flex flex-wrap gap-3">
-                <DownloadButton url={LINUX_APPIMAGE_URL} label="AppImage" />
+                <DownloadButton url={FLATPAK_REF_URL} label="Flatpak" />
               </div>
             </div>
-          </div>
-
-          {/* macOS */}
-          <div
-            className="rounded-xl p-6 md:p-8 mb-6 border"
-            style={{
-              backgroundColor: 'var(--theme-card-bg)',
-              borderColor: 'var(--theme-border)',
-            }}
-          >
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <h2
-                className="text-xl md:text-2xl font-bold"
-                style={{ color: 'var(--theme-text-primary)' }}
-              >
-                macOS
-              </h2>
-              <div className="flex flex-wrap gap-3">
-                <DownloadButton url={MACOS_ARM64_URL} label="Apple Silicon" />
-                <DownloadButton url={MACOS_X64_URL} label="Intel" />
-              </div>
-            </div>
+            <p className="text-sm mt-4" style={{ color: 'var(--theme-text-secondary)' }}>
+              Or install from a terminal:
+            </p>
+            <pre
+              className="text-xs md:text-sm mt-2 p-3 rounded-lg overflow-x-auto"
+              style={{
+                backgroundColor: 'var(--theme-page-bg)',
+                color: 'var(--theme-text-secondary)',
+              }}
+            >
+              flatpak install --user {FLATPAK_REF_URL}
+            </pre>
           </div>
 
           {/* Other */}
@@ -157,7 +152,13 @@ export function Downloads() {
               Other
             </h2>
             <div className="flex flex-col gap-2">
+              <DownloadLink url={LINUX_APPIMAGE_URL} label="Linux AppImage" />
               <DownloadLink url={LINUX_ARM64_APPIMAGE_URL} label="Linux AppImage (arm64)" />
+              <DownloadLink url={LINUX_FLATPAK_BUNDLE_URL} label="Linux Flatpak bundle" />
+              <DownloadLink
+                url={LINUX_ARM64_FLATPAK_BUNDLE_URL}
+                label="Linux Flatpak bundle (arm64)"
+              />
               <DownloadLink url={LINUX_PORTABLE_URL} label="Linux Portable" />
               <DownloadLink url={LINUX_ARM64_PORTABLE_URL} label="Linux Portable (arm64)" />
               <DownloadLink url={WINDOWS_EXE_URL} label="Windows Portable" />
