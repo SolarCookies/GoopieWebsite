@@ -6,7 +6,7 @@ import { Input } from '../ui/input';
 import { EditorSection } from './EditorSection';
 import { inputStyle, labelClass, labelStyle } from './editorStyles';
 
-const ALL_PLATFORMS: Platform[] = ['Windows', 'Linux', 'Mac'];
+const ALL_PLATFORMS: Platform[] = ['Windows', 'Linux', 'Mac', 'Android'];
 
 interface Props {
   form: Game;

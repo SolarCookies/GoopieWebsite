@@ -1,4 +1,4 @@
-export type Platform = 'Windows' | 'Linux' | 'Mac';
+export type Platform = 'Windows' | 'Linux' | 'Mac' | 'Android';
 
 export interface Game {
   id: string;

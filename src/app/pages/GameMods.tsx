@@ -50,6 +50,7 @@ const PLATFORM_PREFIXES: { prefix: string; platform: Platform }[] = [
   { prefix: 'windows', platform: 'Windows' },
   { prefix: 'linux', platform: 'Linux' },
   { prefix: 'mac', platform: 'Mac' },
+  { prefix: 'android', platform: 'Android' },
 ];
 
 function PlatformBadges({ platform, isCode }: { platform: string[] | undefined; isCode: boolean | undefined }) {
